@@ -1,0 +1,5 @@
+get "https://www.smhi.se/wpt-a/backend_startpage_nextgen/forecast/fetcher/2673730/combined"
+extract "\"t\":\"(-?[\d.]+)"
+first
+prepend "SMHI:"
+append "°C"

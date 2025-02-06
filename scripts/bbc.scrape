@@ -1,0 +1,7 @@
+get "http://feeds.bbci.co.uk/news/world/rss.xml"
+
+extract "(?s)<title>(.+?)</title>"
+
+drop 2
+
+extract "(?s)CDATA\[(.+?)\]\]"

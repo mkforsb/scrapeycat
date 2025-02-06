@@ -1,0 +1,14 @@
+get "https://etymonline.com/word/{1}"
+store $page
+extract "(?s)<h1.*?class=\"word__name[^>]+>(.+?)</h1>"
+store $word
+clear
+load $page
+extract "(?s)<section class=\"word__def[^>]+>(.+?)</section>"
+first
+store $description
+clear
+load $word
+load $description
+delete "</?[^>]+>"
+delete "&quot;"

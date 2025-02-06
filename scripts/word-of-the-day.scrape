@@ -1,0 +1,2 @@
+get "https://www.merriam-webster.com/word-of-the-day"
+extract "<h2.*?word-header-txt.*?>(.+?)</h2"
