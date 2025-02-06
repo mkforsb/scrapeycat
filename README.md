@@ -1,2 +1,2 @@
 # scrapeycat
-Scriptable web scraper daemon
+Scriptable web scraper daemon, very early days.
