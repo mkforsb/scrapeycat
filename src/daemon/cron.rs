@@ -548,11 +548,126 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_invalid() {
+    fn test_parse_invalid_missing_spec() {
         assert!("".parse::<CronSpec>().is_err());
-        assert!("* * * * _".parse::<CronSpec>().is_err());
+        assert!("*".parse::<CronSpec>().is_err());
+        assert!("* *".parse::<CronSpec>().is_err());
+        assert!("* * *".parse::<CronSpec>().is_err());
+        assert!("* * * *".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_minute() {
+        assert!("60 * * * *".parse::<CronSpec>().is_err());
+        assert!("100 * * * *".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_hour() {
+        assert!("* 24 * * *".parse::<CronSpec>().is_err());
+        assert!("* 100 * * *".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_day_of_month() {
+        assert!("* * 0 * *".parse::<CronSpec>().is_err());
+        assert!("* * 32 * *".parse::<CronSpec>().is_err());
+        assert!("* * 100 * *".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_month() {
+        assert!("* * * 0 *".parse::<CronSpec>().is_err());
+        assert!("* * * 13 *".parse::<CronSpec>().is_err());
+        assert!("* * * 100 *".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_day_of_week() {
+        assert!("* * * * 0".parse::<CronSpec>().is_err());
+        assert!("* * * * 8".parse::<CronSpec>().is_err());
+        assert!("* * * * 100".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_step() {
         assert!("*/ * * * *".parse::<CronSpec>().is_err());
-        assert!("5-1 * * * *".parse::<CronSpec>().is_err());
-        assert!("* * 3/0 * *".parse::<CronSpec>().is_err());
+        assert!("* 1/ * * *".parse::<CronSpec>().is_err());
+        assert!("* * 2-3/ * *".parse::<CronSpec>().is_err());
+        assert!("* * * */ *".parse::<CronSpec>().is_err());
+        assert!("* * * * 4/".parse::<CronSpec>().is_err());
+
+        assert!("*/0 * * * *".parse::<CronSpec>().is_err());
+        assert!("* 1/0 * * *".parse::<CronSpec>().is_err());
+        assert!("* * 2-3/0 * *".parse::<CronSpec>().is_err());
+        assert!("* * * */0 *".parse::<CronSpec>().is_err());
+        assert!("* * * * 4/0".parse::<CronSpec>().is_err());
+
+        assert!("*/60 * * * *".parse::<CronSpec>().is_err());
+        assert!("* 1/24 * * *".parse::<CronSpec>().is_err());
+        assert!("* * 2-3/32 * *".parse::<CronSpec>().is_err());
+        assert!("* * * */13 *".parse::<CronSpec>().is_err());
+        assert!("* * * * 4/8".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_range_start() {
+        assert!("60-61 * * * *".parse::<CronSpec>().is_err());
+        assert!("* 24-25 * * *".parse::<CronSpec>().is_err());
+        assert!("* * 32-33 * *".parse::<CronSpec>().is_err());
+        assert!("* * * 13-14 *".parse::<CronSpec>().is_err());
+        assert!("* * * * 8-9".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_range_end() {
+        assert!("0-60 * * * *".parse::<CronSpec>().is_err());
+        assert!("* 0-24 * * *".parse::<CronSpec>().is_err());
+        assert!("* * 1-32 * *".parse::<CronSpec>().is_err());
+        assert!("* * * 1-13 *".parse::<CronSpec>().is_err());
+        assert!("* * * * 1-8".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_parse_invalid_reverse_range() {
+        assert!("2-1 * * * *".parse::<CronSpec>().is_err());
+        assert!("* 3-2 * * *".parse::<CronSpec>().is_err());
+        assert!("* * 4-3 * *".parse::<CronSpec>().is_err());
+        assert!("* * * 5-4 *".parse::<CronSpec>().is_err());
+        assert!("* * * * 6-5".parse::<CronSpec>().is_err());
+    }
+
+    #[test]
+    fn test_cronspec_to_regex() {
+        assert!("* * * * *"
+            .parse::<CronSpec>()
+            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(..)(..)" }));
+
+        assert!("1,5 * * * *"
+            .parse::<CronSpec>()
+            .is_ok_and(|result| { result.to_regex_pattern() == "(01|05)(..)(..)(..)(..)" }));
+
+        assert!("* 2-3 * * *"
+            .parse::<CronSpec>()
+            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(02|03)(..)(..)(..)" }));
+
+        assert!("* * 4/10 * *"
+            .parse::<CronSpec>()
+            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(04|14|24)(..)(..)" }));
+
+        assert!("* * * 3-7/2 *"
+            .parse::<CronSpec>()
+            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(03|05|07)(..)" }));
+
+        assert!("* * * * */3"
+            .parse::<CronSpec>()
+            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(..)(01|04|07)" }));
+
+        assert!("2,7 4-6 10/5 2/4 */2"
+            .parse::<CronSpec>()
+            .is_ok_and(|result| {
+                result.to_regex_pattern()
+                    == "(02|07)(04|05|06)(10|15|20|25|30)(02|06|10)(01|03|05|07)"
+            }));
     }
 }
