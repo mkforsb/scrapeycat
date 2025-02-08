@@ -54,7 +54,10 @@ pub async fn run_forever(suites: Vec<Suite>, script_loader: fn(&str) -> Result<S
                 (
                     job,
                     tx,
-                    tokio::spawn(effects_handler(format!("{}-{}", suite.name(), nth), rx)),
+                    tokio::spawn(effects_handler(
+                        format!("{}.{}-{}", suite.name(), job.script_name(), nth),
+                        rx,
+                    )),
                 )
             })
         })
