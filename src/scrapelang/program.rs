@@ -20,7 +20,6 @@ pub async fn run(
     args: Vec<String>,
     kwargs: HashMap<String, String>,
     script_loader: fn(&str) -> Result<String, Error>,
-    // effects: HashMap<String, EffectSignature>,
     effect_sender: UnboundedSender<EffectInvocation>,
 ) -> Result<Vector<String>, Error> {
     let script = script_loader(script_name)?;
@@ -156,7 +155,6 @@ pub async fn run(
                         args_subst,
                         kwargs_subst,
                         script_loader,
-                        // effects.clone(),
                         effect_sender.clone(),
                     ))
                     .await?,
