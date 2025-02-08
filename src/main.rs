@@ -1,10 +1,11 @@
 use std::{collections::HashMap, env, fs};
 
 use scrapeycat::{
-    effect::{self, EffectSignature},
+    effect::{self, EffectInvocation},
     scrapelang::program::run,
     Error,
 };
+use tokio::sync::mpsc;
 
 fn load_script(name_or_filename: &str) -> Result<String, Error> {
     fs::read_to_string(name_or_filename)
@@ -18,13 +19,8 @@ fn load_script(name_or_filename: &str) -> Result<String, Error> {
 async fn main() {
     let args = env::args().collect::<Vec<_>>();
 
-    let effects: HashMap<String, EffectSignature> = HashMap::from_iter(
-        ([
-            ("print".to_string(), effect::print as EffectSignature),
-            ("notify".to_string(), effect::notify),
-        ])
-        .into_iter(),
-    );
+    let (effects_sender, effects_receiver) = mpsc::unbounded_channel::<EffectInvocation>();
+    let effects_runner_task = tokio::spawn(effect::default_effects_runner_task(effects_receiver));
 
     match args.get(1) {
         Some(script_name_or_filename) => {
@@ -37,10 +33,12 @@ async fn main() {
                     args,
                     HashMap::new(),
                     load_script,
-                    effects
+                    effects_sender,
                 )
                 .await
             );
+
+            let _ = tokio::join!(effects_runner_task);
         }
         None => {
             println!(

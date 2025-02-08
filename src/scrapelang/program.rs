@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use im::{vector, Vector};
 use regex::Regex;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    effect::{EffectOptions, EffectSignature},
+    effect::EffectInvocation,
     scrapelang::{
         lexer::lex,
         parser::{parse, ScrapeLangArgument, ScrapeLangInstruction},
@@ -19,7 +20,8 @@ pub async fn run(
     args: Vec<String>,
     kwargs: HashMap<String, String>,
     script_loader: fn(&str) -> Result<String, Error>,
-    effects: HashMap<String, EffectSignature>,
+    // effects: HashMap<String, EffectSignature>,
+    effect_sender: UnboundedSender<EffectInvocation>,
 ) -> Result<Vector<String>, Error> {
     let script = script_loader(script_name)?;
     let code = strip_comments(&script);
@@ -84,14 +86,10 @@ pub async fn run(
                     })
                     .collect::<Result<HashMap<String, String>, Error>>()?;
 
-                if let Some(error) = (effects
-                    .get(&effect_name)
-                    .ok_or(Error::EffectNotFoundError)?)(
-                    &args_subst,
-                    &kwargs_subst,
-                    EffectOptions::Default,
-                ) {
-                    eprintln!("{error}")
+                if let Err(e) =
+                    effect_sender.send(EffectInvocation::new(effect_name, args_subst, kwargs_subst))
+                {
+                    eprintln!("{e}");
                 }
             }
             ScrapeLangInstruction::First => scraper = scraper.first(),
@@ -158,7 +156,8 @@ pub async fn run(
                         args_subst,
                         kwargs_subst,
                         script_loader,
-                        effects.clone(),
+                        // effects.clone(),
+                        effect_sender.clone(),
                     ))
                     .await?,
                 );

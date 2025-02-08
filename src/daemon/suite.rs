@@ -7,12 +7,20 @@ use crate::{daemon::cron::CronSpec, Error};
 
 #[derive(Debug)]
 pub struct Suite {
+    name: String,
     jobs: Vec<Job>,
 }
 
 impl Suite {
-    pub fn new(jobs: Vec<Job>) -> Self {
-        Suite { jobs }
+    pub fn new(name: impl Into<String>, jobs: Vec<Job>) -> Self {
+        Suite {
+            name: name.into(),
+            jobs,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn jobs(&self) -> impl Iterator<Item = &Job> {
@@ -23,6 +31,7 @@ impl Suite {
 #[expect(unused)]
 #[derive(Debug)]
 pub struct Job {
+    name: String,
     script_name: String,
     args: Vec<String>,
     kwargs: HashMap<String, String>,
@@ -33,6 +42,7 @@ pub struct Job {
 
 impl Job {
     pub fn new(
+        name: impl Into<String>,
         script_name: impl Into<String>,
         schedule: CronSpec,
         dedup: bool,
@@ -40,6 +50,7 @@ impl Job {
         let schedule_regex = Regex::new(&schedule.to_regex_pattern())?;
 
         Ok(Job {
+            name: name.into(),
             script_name: script_name.into(),
             args: vec![],
             kwargs: HashMap::new(),
@@ -47,6 +58,10 @@ impl Job {
             schedule_regex,
             dedup,
         })
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn script_name(&self) -> &str {

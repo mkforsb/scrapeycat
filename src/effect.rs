@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use notify_rust::Notification;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::Error;
 
@@ -43,6 +44,69 @@ impl EffectOptions {
 pub type EffectArgs<'a> = &'a [String];
 pub type EffectKwArgs<'a> = &'a HashMap<String, String>;
 pub type EffectSignature = fn(EffectArgs, EffectKwArgs, EffectOptions) -> Option<Error>;
+
+#[derive(Debug, Clone)]
+pub struct EffectInvocation {
+    name: String,
+    args: Vec<String>,
+    kwargs: HashMap<String, String>,
+}
+
+impl EffectInvocation {
+    pub fn new(
+        name: impl Into<String>,
+        args: Vec<String>,
+        kwargs: HashMap<String, String>,
+    ) -> Self {
+        EffectInvocation {
+            name: name.into(),
+            args,
+            kwargs,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn args(&self) -> &Vec<String> {
+        &self.args
+    }
+
+    pub fn kwargs(&self) -> &HashMap<String, String> {
+        &self.kwargs
+    }
+}
+
+pub async fn default_effects_runner_task(
+    mut effects_receiver: UnboundedReceiver<EffectInvocation>,
+) {
+    loop {
+        match effects_receiver.recv().await {
+            Some(invocation) => {
+                let effect_fn = match invocation.name() {
+                    "print" => Some(print as EffectSignature),
+                    "notify" => Some(notify as EffectSignature),
+                    _ => None,
+                };
+
+                match effect_fn {
+                    Some(f) => {
+                        if let Some(e) = f(
+                            invocation.args(),
+                            invocation.kwargs(),
+                            EffectOptions::Default,
+                        ) {
+                            eprintln!("{e}");
+                        }
+                    }
+                    None => eprint!("Unknown effect `{}`", invocation.name()),
+                }
+            }
+            None => return,
+        }
+    }
+}
 
 pub fn print(args: EffectArgs, kwargs: EffectKwArgs, opts: EffectOptions) -> Option<Error> {
     macro_rules! maybe_print {
