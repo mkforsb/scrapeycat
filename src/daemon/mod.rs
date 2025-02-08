@@ -26,13 +26,13 @@ async fn effects_handler(id: String, mut effects_receiver: UnboundedReceiver<Eff
                 };
 
                 match effect_fn {
-                    Some(f) => {
-                        if let Some(e) = f(
+                    Some(function) => {
+                        if let Some(error) = function(
                             invocation.args(),
                             invocation.kwargs(),
                             EffectOptions::Default,
                         ) {
-                            eprintln!("{e}");
+                            eprintln!("{error}");
                         }
                     }
                     None => eprintln!("Unknown effect `{}` invoked from {id}", invocation.name()),
