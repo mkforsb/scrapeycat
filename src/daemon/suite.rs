@@ -84,4 +84,8 @@ impl Job {
         self.schedule_regex
             .is_match(&format!("{}", when.format("%M%H%d%m0%u")))
     }
+
+    pub fn is_dedup(&self) -> bool {
+        self.dedup
+    }
 }
