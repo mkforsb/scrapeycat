@@ -9,7 +9,7 @@ use suite::Suite;
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 use crate::{
-    effect::{self, EffectInvocation, EffectOptions, EffectSignature},
+    effect::{EffectInvocation, EffectOptions, EffectSignature},
     scrapelang::program::run,
     Error,
 };
@@ -41,12 +41,11 @@ async fn effects_handler(
 
 // TODO: implement dedup
 // TODO: it would be cool if the daemon could pick up changes to the config automatically
-pub async fn run_forever(suites: Vec<Suite>, script_loader: fn(&str) -> Result<String, Error>) {
-    let effects = HashMap::from([
-        ("print".to_string(), effect::print as EffectSignature),
-        ("notify".to_string(), effect::notify as EffectSignature),
-    ]);
-
+pub async fn run_forever(
+    suites: Vec<Suite>,
+    script_loader: fn(&str) -> Result<String, Error>,
+    effects: HashMap<String, EffectSignature>,
+) {
     let jobs = suites
         .iter()
         .flat_map(|suite| {
@@ -94,9 +93,17 @@ pub async fn run_forever(suites: Vec<Suite>, script_loader: fn(&str) -> Result<S
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs};
+    use std::{
+        env, fs,
+        sync::atomic::{AtomicU32, Ordering::SeqCst},
+    };
 
-    use crate::daemon::{cron::CronSpec, suite::Job};
+    use flagset::FlagSet;
+
+    use crate::{
+        daemon::{cron::CronSpec, suite::Job},
+        effect::{EffectArgs, EffectKwArgs},
+    };
 
     use super::*;
 
@@ -107,8 +114,8 @@ mod tests {
         })
     }
 
-    // TODO: automate, have it run for 3.5s and check there are three prints
-    #[ignore]
+    static TEST_PRINT_ONCE_PER_SECOND_COUNT: AtomicU32 = AtomicU32::new(0);
+
     #[tokio::test]
     async fn test_print_once_per_second() {
         let suite = Suite::new(
@@ -125,6 +132,27 @@ mod tests {
             .unwrap()],
         );
 
-        run_forever(vec![suite], load_script).await;
+        TEST_PRINT_ONCE_PER_SECOND_COUNT.swap(0, SeqCst);
+
+        fn print(_: EffectArgs, _: EffectKwArgs, _: FlagSet<EffectOptions>) -> Option<Error> {
+            TEST_PRINT_ONCE_PER_SECOND_COUNT.fetch_add(1, SeqCst);
+            None
+        }
+
+        let effects: HashMap<String, EffectSignature> =
+            HashMap::from([("print".to_string(), print as EffectSignature)]);
+
+        let task_handle = tokio::spawn(run_forever(vec![suite], load_script, effects));
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_COUNT.load(SeqCst), 1);
+
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_COUNT.load(SeqCst), 2);
+
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_COUNT.load(SeqCst), 3);
+
+        task_handle.abort();
     }
 }
