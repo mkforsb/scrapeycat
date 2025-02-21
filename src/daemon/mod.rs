@@ -92,20 +92,20 @@ pub async fn run_forever(suites: Vec<Suite>, script_loader: fn(&str) -> Result<S
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{env, fs};
 
     use crate::daemon::{cron::CronSpec, suite::Job};
 
     use super::*;
 
     fn load_script(name_or_filename: &str) -> Result<String, Error> {
-        fs::read_to_string(name_or_filename)
-            .or_else(|_| fs::read_to_string(format!("{name_or_filename}.scrape")))
-            .or_else(|_| fs::read_to_string(format!("./scripts/{name_or_filename}")))
-            .or_else(|_| fs::read_to_string(format!("./scripts/{name_or_filename}.scrape")))
-            .map_err(|e| e.into())
+        fs::read_to_string(name_or_filename).map_err(|e| {
+            eprintln!("error loading {name_or_filename}: {e}");
+            e.into()
+        })
     }
 
+    // TODO: automate, have it run for 3.5s and check there are three prints
     #[ignore]
     #[tokio::test]
     async fn test_print_once_per_second() {
@@ -113,9 +113,12 @@ mod tests {
             "default".to_string(),
             vec![Job::new(
                 "default",
-                "print",
+                format!(
+                    "{}/scripts/print.scrape",
+                    env::var("CARGO_MANIFEST_DIR").unwrap()
+                ),
                 "* * * * *".parse::<CronSpec>().unwrap(),
-                true,
+                false,
             )
             .unwrap()],
         );
