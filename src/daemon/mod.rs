@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use chrono::Local;
 
@@ -15,29 +15,25 @@ use crate::{
 };
 
 // TODO: implement dedup
-async fn effects_handler(id: String, mut effects_receiver: UnboundedReceiver<EffectInvocation>) {
+async fn effects_handler(
+    id: String,
+    mut effects_receiver: UnboundedReceiver<EffectInvocation>,
+    effects: HashMap<String, EffectSignature>,
+) {
     loop {
         match effects_receiver.recv().await {
-            Some(invocation) => {
-                let effect_fn = match invocation.name() {
-                    "print" => Some(effect::print as EffectSignature),
-                    "notify" => Some(effect::notify as EffectSignature),
-                    _ => None,
-                };
-
-                match effect_fn {
-                    Some(function) => {
-                        if let Some(error) = function(
-                            invocation.args(),
-                            invocation.kwargs(),
-                            EffectOptions::default().into(),
-                        ) {
-                            eprintln!("{error}");
-                        }
+            Some(invocation) => match effects.get(invocation.name()) {
+                Some(function) => {
+                    if let Some(error) = function(
+                        invocation.args(),
+                        invocation.kwargs(),
+                        EffectOptions::default().into(),
+                    ) {
+                        eprintln!("{error}");
                     }
-                    None => eprintln!("Unknown effect `{}` invoked from {id}", invocation.name()),
                 }
-            }
+                None => eprintln!("Unknown effect `{}` invoked from {id}", invocation.name()),
+            },
             None => return,
         }
     }
@@ -46,6 +42,11 @@ async fn effects_handler(id: String, mut effects_receiver: UnboundedReceiver<Eff
 // TODO: implement dedup
 // TODO: it would be cool if the daemon could pick up changes to the config automatically
 pub async fn run_forever(suites: Vec<Suite>, script_loader: fn(&str) -> Result<String, Error>) {
+    let effects = HashMap::from([
+        ("print".to_string(), effect::print as EffectSignature),
+        ("notify".to_string(), effect::notify as EffectSignature),
+    ]);
+
     let jobs = suites
         .iter()
         .flat_map(|suite| {
@@ -57,6 +58,7 @@ pub async fn run_forever(suites: Vec<Suite>, script_loader: fn(&str) -> Result<S
                     tokio::spawn(effects_handler(
                         format!("{}.{}-{}", suite.name(), job.script_name(), nth),
                         rx,
+                        effects.clone(),
                     )),
                 )
             })
