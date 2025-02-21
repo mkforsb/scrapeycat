@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
 use flagset::{flags, FlagSet};
 use notify_rust::Notification;
@@ -55,6 +58,28 @@ pub struct EffectInvocation {
     name: String,
     args: Vec<String>,
     kwargs: HashMap<String, String>,
+}
+
+impl Hash for EffectInvocation {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        self.name.hash(hasher);
+
+        for (n, arg) in self.args.iter().enumerate() {
+            n.hash(hasher);
+            arg.hash(hasher);
+        }
+
+        let mut keys = self.kwargs.keys().collect::<Vec<_>>();
+        keys.sort();
+
+        for key in keys {
+            key.hash(hasher);
+            self.kwargs
+                .get(key)
+                .expect("key still exists in map")
+                .hash(hasher);
+        }
+    }
 }
 
 impl EffectInvocation {

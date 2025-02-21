@@ -1,10 +1,15 @@
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::{DefaultHasher, Hash, Hasher},
+    time::Duration,
+};
 
 use chrono::Local;
 
 pub mod cron;
 pub mod suite;
 
+use flagset::{flags, FlagSet};
 use suite::Suite;
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
@@ -14,26 +19,53 @@ use crate::{
     Error,
 };
 
-// TODO: implement dedup
+flags! {
+    #[derive(Default)]
+    enum EffectsHandlerOptions: u32 {
+        #[default]
+        Default = 0,
+
+        Deduplicate = 1,
+    }
+}
+
 async fn effects_handler(
     id: String,
     mut effects_receiver: UnboundedReceiver<EffectInvocation>,
     effects: HashMap<String, EffectSignature>,
+    options: FlagSet<EffectsHandlerOptions>,
 ) {
+    let mut dedup_seen: HashSet<u64> = HashSet::new();
+
     loop {
         match effects_receiver.recv().await {
-            Some(invocation) => match effects.get(invocation.name()) {
-                Some(function) => {
-                    if let Some(error) = function(
-                        invocation.args(),
-                        invocation.kwargs(),
-                        EffectOptions::default().into(),
-                    ) {
-                        eprintln!("{error}");
+            Some(invocation) => {
+                if options.contains(EffectsHandlerOptions::Deduplicate) {
+                    let mut hasher = DefaultHasher::new();
+                    invocation.hash(&mut hasher);
+
+                    let invocation_hash = hasher.finish();
+
+                    if dedup_seen.contains(&invocation_hash) {
+                        continue;
                     }
+
+                    dedup_seen.insert(invocation_hash);
                 }
-                None => eprintln!("Unknown effect `{}` invoked from {id}", invocation.name()),
-            },
+
+                match effects.get(invocation.name()) {
+                    Some(function) => {
+                        if let Some(error) = function(
+                            invocation.args(),
+                            invocation.kwargs(),
+                            EffectOptions::default().into(),
+                        ) {
+                            eprintln!("{error}");
+                        }
+                    }
+                    None => eprintln!("Unknown effect `{}` invoked from {id}", invocation.name()),
+                }
+            }
             None => return,
         }
     }
@@ -50,6 +82,12 @@ pub async fn run_forever(
         .iter()
         .flat_map(|suite| {
             suite.jobs().enumerate().map(|(nth, job)| {
+                let mut options: FlagSet<_> = EffectsHandlerOptions::Default.into();
+
+                if job.is_dedup() {
+                    options |= EffectsHandlerOptions::Deduplicate;
+                }
+
                 let (tx, rx) = mpsc::unbounded_channel::<EffectInvocation>();
                 (
                     job,
@@ -58,6 +96,7 @@ pub async fn run_forever(
                         format!("{}.{}-{}", suite.name(), job.script_name(), nth),
                         rx,
                         effects.clone(),
+                        options,
                     )),
                 )
             })
@@ -152,6 +191,48 @@ mod tests {
 
         tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         assert_eq!(TEST_PRINT_ONCE_PER_SECOND_COUNT.load(SeqCst), 3);
+
+        task_handle.abort();
+    }
+
+    static TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT: AtomicU32 = AtomicU32::new(0);
+
+    #[tokio::test]
+    async fn test_print_once_per_second_dedup() {
+        let suite = Suite::new(
+            "default".to_string(),
+            vec![Job::new(
+                "default",
+                format!(
+                    "{}/scripts/print.scrape",
+                    env::var("CARGO_MANIFEST_DIR").unwrap()
+                ),
+                "* * * * *".parse::<CronSpec>().unwrap(),
+                true,
+            )
+            .unwrap()],
+        );
+
+        TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.swap(0, SeqCst);
+
+        fn print(_: EffectArgs, _: EffectKwArgs, _: FlagSet<EffectOptions>) -> Option<Error> {
+            TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.fetch_add(1, SeqCst);
+            None
+        }
+
+        let effects: HashMap<String, EffectSignature> =
+            HashMap::from([("print".to_string(), print as EffectSignature)]);
+
+        let task_handle = tokio::spawn(run_forever(vec![suite], load_script, effects));
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.load(SeqCst), 1);
+
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.load(SeqCst), 1);
+
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.load(SeqCst), 1);
 
         task_handle.abort();
     }
