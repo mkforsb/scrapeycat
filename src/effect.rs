@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use flagset::{flags, FlagSet};
 use notify_rust::Notification;
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -25,25 +26,29 @@ fn report_unknown_kwargs(
     }
 }
 
-pub enum Mode {
-    Normal,
-    SilentTest,
+flags! {
+    #[derive(Default)]
+    pub enum EffectOptions: u32 {
+        #[default]
+        Defaults = 0,
+
+        SilentTest = 1,
+    }
 }
 
-pub enum EffectOptions {
-    Default,
-    WithMode(Mode),
+pub trait EffectOptionsExt {
+    fn is_silent_test(&self) -> bool;
 }
 
-impl EffectOptions {
-    pub fn is_silent_test(&self) -> bool {
-        matches!(self, EffectOptions::WithMode(Mode::SilentTest))
+impl EffectOptionsExt for FlagSet<EffectOptions> {
+    fn is_silent_test(&self) -> bool {
+        self.contains(EffectOptions::SilentTest)
     }
 }
 
 pub type EffectArgs<'a> = &'a [String];
 pub type EffectKwArgs<'a> = &'a HashMap<String, String>;
-pub type EffectSignature = fn(EffectArgs, EffectKwArgs, EffectOptions) -> Option<Error>;
+pub type EffectSignature = fn(EffectArgs, EffectKwArgs, FlagSet<EffectOptions>) -> Option<Error>;
 
 #[derive(Debug, Clone)]
 pub struct EffectInvocation {
@@ -95,7 +100,7 @@ pub async fn default_effects_runner_task(
                         if let Some(e) = f(
                             invocation.args(),
                             invocation.kwargs(),
-                            EffectOptions::Default,
+                            EffectOptions::default().into(),
                         ) {
                             eprintln!("{e}");
                         }
@@ -108,7 +113,11 @@ pub async fn default_effects_runner_task(
     }
 }
 
-pub fn print(args: EffectArgs, kwargs: EffectKwArgs, opts: EffectOptions) -> Option<Error> {
+pub fn print(
+    args: EffectArgs,
+    kwargs: EffectKwArgs,
+    opts: FlagSet<EffectOptions>,
+) -> Option<Error> {
     macro_rules! maybe_print {
         ($($stuff:expr),+) => {
             if !opts.is_silent_test() {
@@ -131,7 +140,11 @@ pub fn print(args: EffectArgs, kwargs: EffectKwArgs, opts: EffectOptions) -> Opt
     report_unknown_kwargs("print", &["end"], kwargs)
 }
 
-pub fn notify(args: EffectArgs, kwargs: EffectKwArgs, opts: EffectOptions) -> Option<Error> {
+pub fn notify(
+    args: EffectArgs,
+    kwargs: EffectKwArgs,
+    opts: FlagSet<EffectOptions>,
+) -> Option<Error> {
     let args_joined = args.to_vec().join(" ");
     let mut notification = Notification::new();
 
@@ -219,19 +232,19 @@ mod tests {
         assert!(print(
             &["hello".to_string(), "world".to_string()],
             &HashMap::new(),
-            EffectOptions::WithMode(Mode::SilentTest),
+            EffectOptions::SilentTest.into(),
         )
         .is_none());
         assert!(print(
             &["hello".to_string(), "world".to_string()],
             &map!["end" => ""],
-            EffectOptions::WithMode(Mode::SilentTest),
+            EffectOptions::SilentTest.into(),
         )
         .is_none());
         assert!(print(
             &["hello".to_string(), "world".to_string()],
             &map!["eol" => ""],
-            EffectOptions::WithMode(Mode::SilentTest),
+            EffectOptions::SilentTest.into(),
         )
         .is_some());
     }
@@ -247,7 +260,7 @@ mod tests {
                 "icon" => "lightbulb.svg",
                 "sound" => "ding.wav"
             ],
-            EffectOptions::WithMode(Mode::SilentTest),
+            EffectOptions::SilentTest.into(),
         )
         .is_none());
     }

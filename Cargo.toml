@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.39"
 dirs = "6.0.0"
+flagset = "0.4.6"
 im = "15.1.0"
 notify-rust = "4.11.4"
 regex = "1.11.1"

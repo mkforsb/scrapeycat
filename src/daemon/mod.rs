@@ -30,7 +30,7 @@ async fn effects_handler(id: String, mut effects_receiver: UnboundedReceiver<Eff
                         if let Some(error) = function(
                             invocation.args(),
                             invocation.kwargs(),
-                            EffectOptions::Default,
+                            EffectOptions::default().into(),
                         ) {
                             eprintln!("{error}");
                         }
