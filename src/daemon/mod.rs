@@ -71,7 +71,6 @@ async fn effects_handler(
     }
 }
 
-// TODO: implement dedup
 // TODO: it would be cool if the daemon could pick up changes to the config automatically
 pub async fn run_forever(
     suites: Vec<Suite>,
