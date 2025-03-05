@@ -11,8 +11,10 @@ im = "15.1.0"
 notify-rust = "4.11.4"
 regex = "1.11.1"
 reqwest = "0.12.12"
+serde = { version = "1.0.218", features = ["derive"] }
 thiserror = "2.0.10"
 tokio = { version = "1.43.0", features = ["full"] }
+toml = "0.8.20"
 winnow = "0.6.24"
 
 [dev-dependencies]
