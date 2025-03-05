@@ -5,7 +5,7 @@ use regex::Regex;
 
 use crate::{daemon::cron::CronSpec, Error};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Suite {
     name: String,
     jobs: Vec<Job>,
@@ -29,7 +29,7 @@ impl Suite {
 }
 
 #[expect(unused)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Job {
     name: String,
     script_name: String,

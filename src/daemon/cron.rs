@@ -47,7 +47,7 @@ impl<const L: u8, const H: u8> CronSpecItem<L, H> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CronSpec {
     minute: Vec<CronSpecItem<0, 59>>,
     hour: Vec<CronSpecItem<0, 23>>,
