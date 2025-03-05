@@ -91,3 +91,28 @@ impl Job {
         self.dedup
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_job_cronspec_to_regex() {
+        let specs = [
+            "* * * * *",
+            "*/10 * * * *",
+            "1 2 3 4 5",
+            "1-2 3-4 5-6 7-8 1",
+        ];
+
+        for spec in specs {
+            assert_eq!(
+                Job::new("", "", None, None, spec.parse::<CronSpec>().unwrap(), true)
+                    .unwrap()
+                    .schedule_regex
+                    .to_string(),
+                spec.parse::<CronSpec>().unwrap().to_regex_pattern()
+            );
+        }
+    }
+}
