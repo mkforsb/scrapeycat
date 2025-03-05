@@ -44,6 +44,8 @@ impl Job {
     pub fn new(
         name: impl Into<String>,
         script_name: impl Into<String>,
+        args: Option<Vec<String>>,
+        kwargs: Option<HashMap<String, String>>,
         schedule: CronSpec,
         dedup: bool,
     ) -> Result<Job, Error> {
@@ -52,8 +54,8 @@ impl Job {
         Ok(Job {
             name: name.into(),
             script_name: script_name.into(),
-            args: vec![],
-            kwargs: HashMap::new(),
+            args: args.unwrap_or_default(),
+            kwargs: kwargs.unwrap_or_default(),
             schedule,
             schedule_regex,
             dedup,

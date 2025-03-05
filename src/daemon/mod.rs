@@ -164,6 +164,8 @@ mod tests {
                     "{}/scripts/print.scrape",
                     env::var("CARGO_MANIFEST_DIR").unwrap()
                 ),
+                None,
+                None,
                 "* * * * *".parse::<CronSpec>().unwrap(),
                 false,
             )
@@ -206,6 +208,8 @@ mod tests {
                     "{}/scripts/print.scrape",
                     env::var("CARGO_MANIFEST_DIR").unwrap()
                 ),
+                None,
+                None,
                 "* * * * *".parse::<CronSpec>().unwrap(),
                 true,
             )
