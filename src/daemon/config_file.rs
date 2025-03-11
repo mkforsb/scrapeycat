@@ -35,7 +35,7 @@ impl ConfigFile {
                     .map_err(|e| Error::ParseError(e.to_string()))?
                     .try_into()?,
             ),
-            _ => unimplemented!(),
+            _ => Err(Error::UnsupportedConfigVersionError),
         }
     }
 }

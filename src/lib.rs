@@ -45,4 +45,7 @@ pub enum Error {
 
     #[error("Invalid range")]
     InvalidRangeError,
+
+    #[error("Unsupported config version")]
+    UnsupportedConfigVersionError,
 }
