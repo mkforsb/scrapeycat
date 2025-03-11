@@ -21,11 +21,13 @@ struct ConfigFile {
 
 impl ConfigFile {
     pub fn get_version(path: &str) -> Result<usize, Error> {
-        Ok(
-            toml::from_str::<ConfigFile>(fs::read_to_string(path)?.as_str())
-                .map_err(|e| Error::ParseError(e.to_string()))?
-                .config_version,
-        )
+        match toml::from_str::<ConfigFile>(fs::read_to_string(path)?.as_str())
+            .map_err(|e| Error::ParseError(e.to_string()))?
+            .config_version
+        {
+            version @ 1 => Ok(version),
+            _ => Err(Error::UnsupportedConfigVersionError),
+        }
     }
 
     pub fn config_from_file(path: &str) -> Result<Config, Error> {
