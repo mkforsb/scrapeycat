@@ -1,5 +1,7 @@
-use std::{collections::HashMap, env, fs};
+use std::{collections::HashMap, fs};
 
+use clap::Parser;
+use regex::Regex;
 use tokio::sync::mpsc;
 
 use scrapeycat::{
@@ -7,6 +9,20 @@ use scrapeycat::{
     scrapelang::program::run,
     Error,
 };
+
+#[derive(Debug, Parser)]
+enum Cli {
+    Run {
+        script: String,
+
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
+    Daemon {
+        config: String,
+    },
+}
 
 fn load_script(name_or_filename: &str) -> Result<String, Error> {
     fs::read_to_string(name_or_filename)
@@ -16,36 +32,97 @@ fn load_script(name_or_filename: &str) -> Result<String, Error> {
         .map_err(|e| e.into())
 }
 
+fn split_posargs_and_kwargs(args: Vec<String>) -> (Vec<String>, HashMap<String, String>) {
+    let identifier = Regex::new("^[A-Za-z_$.-][A-Za-z0-9_$.-]*").expect("Should be a valid regex");
+
+    let mut posargs = Vec::new();
+    let mut kwargs = HashMap::new();
+
+    for val in args {
+        if identifier.is_match(&val) && val.contains('=') {
+            let (key, val) = val.split_at(val.find('=').expect("Should exist due to `contains`"));
+            kwargs.insert(key.to_string(), val[1..].to_string());
+        } else {
+            posargs.push(val);
+        }
+    }
+
+    (posargs, kwargs)
+}
+
 #[tokio::main]
 async fn main() {
-    let args = env::args().collect::<Vec<_>>();
+    match Cli::parse() {
+        Cli::Run { script, args } => {
+            let (effects_sender, effects_receiver) = mpsc::unbounded_channel::<EffectInvocation>();
+            let effects_runner_task =
+                tokio::spawn(effect::default_effects_runner_task(effects_receiver));
 
-    let (effects_sender, effects_receiver) = mpsc::unbounded_channel::<EffectInvocation>();
-    let effects_runner_task = tokio::spawn(effect::default_effects_runner_task(effects_receiver));
-
-    match args.get(1) {
-        Some(script_name_or_filename) => {
-            let args = env::args().skip(2).collect::<Vec<String>>();
+            let (posargs, kwargs) = split_posargs_and_kwargs(args);
 
             println!(
                 "{:#?}",
-                run(
-                    script_name_or_filename,
-                    args,
-                    HashMap::new(),
-                    load_script,
-                    effects_sender,
-                )
-                .await
+                run(&script, posargs, kwargs, load_script, effects_sender).await
             );
 
             let _ = tokio::join!(effects_runner_task);
         }
-        None => {
-            println!(
-                "usage: {} path/to/script",
-                args.first().unwrap_or(&"scrapeycat".to_string())
-            );
+
+        Cli::Daemon { config: _ } => todo!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_split_posargs_and_kwargs() {
+        macro_rules! args {
+            ($($($val:expr),+)?) => {
+                Vec::<String>::from([
+                    $($(($val.into())),+)?
+                ])
+            };
         }
+
+        macro_rules! map {
+            ($($($key:expr => $val:expr),+)?) => {
+                HashMap::<String, String>::from([
+                    $($(($key.into(), $val.into())),+)?
+                ])
+            };
+        }
+
+        assert_eq!(split_posargs_and_kwargs(args![]), (vec![], map![]));
+        assert_eq!(split_posargs_and_kwargs(args!["a"]), (args!["a"], map![]));
+
+        assert_eq!(
+            split_posargs_and_kwargs(args!["b=c"]),
+            (args![], map!["b" => "c"])
+        );
+
+        assert_eq!(
+            split_posargs_and_kwargs(args!["a", "b=c"]),
+            (args!["a"], map!["b" => "c"])
+        );
+
+        assert_eq!(
+            split_posargs_and_kwargs(args!["a", "b=c", "dee", "ee=eff"]),
+            (args!["a", "dee"], map!["b" => "c", "ee" => "eff"])
+        );
+
+        assert_eq!(
+            split_posargs_and_kwargs(args!["a", "b=c", "dee", "ee=eff", "=gee"]),
+            (args!["a", "dee", "=gee"], map!["b" => "c", "ee" => "eff"])
+        );
+
+        assert_eq!(
+            split_posargs_and_kwargs(args!["a", "b=c", "dee", "ee=eff", "=gee", "1=2"]),
+            (
+                args!["a", "dee", "=gee", "1=2"],
+                map!["b" => "c", "ee" => "eff"]
+            )
+        );
     }
 }
