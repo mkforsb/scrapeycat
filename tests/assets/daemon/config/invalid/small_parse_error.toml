@@ -1,0 +1,3 @@
+config_version = 1
+script_dirs = ["/v1_empty"]
+script_names = "${NAME}.v1_empty"]

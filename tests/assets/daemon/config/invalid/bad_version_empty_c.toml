@@ -1,0 +1,3 @@
+config_version = 9999999
+script_dirs = [".", "${HOME}/.scrapeycat/scripts"]
+script_names = ["${NAME}", "${NAME}.scrape"]

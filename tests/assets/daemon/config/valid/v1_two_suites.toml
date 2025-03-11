@@ -1,0 +1,15 @@
+config_version = 1
+script_dirs = ["/v1_two_suites"]
+script_names = ["${NAME}.txt"]
+
+[suites.first]
+jobs = [
+    { script = "foo", schedule = "* * * * *", dedup = true },
+    { script = "bar", schedule = "* * * * *", dedup = true },
+]
+
+[suites.second]
+jobs = [
+    { script = "baz", schedule = "* * * * *", dedup = true },
+    { script = "qux", schedule = "* * * * *", dedup = true },
+]

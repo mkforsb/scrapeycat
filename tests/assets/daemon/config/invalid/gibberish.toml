@@ -1,0 +1,14 @@
+<li><code>RUSTC</code> — Instead of running <code>rustc</code>, Cargo will execute this specified
+compiler instead. See <a href="config.html#buildrustc"><code>build.rustc</code></a> to set via config.</li>
+<li><code>RUSTC_WRAPPER</code> — Instead of simply running <code>rustc</code>, Cargo will execute this
+specified wrapper, passing as its command-line arguments the rustc
+invocation, with the first argument being the path to the actual rustc.
+Useful to set up a build cache tool such as <code>sccache</code>. See
+<a href="config.html#buildrustc-wrapper"><code>build.rustc-wrapper</code></a> to set via config. Setting this to the empty string
+overwrites the config and resets cargo to not use a wrapper.</li>
+<li><code>RUSTC_WORKSPACE_WRAPPER</code> — Instead of simply running <code>rustc</code>, for workspace members Cargo will
+execute this specified wrapper, passing as its command-line arguments the rustc invocation, with
+the first argument being the path to the actual rustc. When building a single-package project
+without workspaces, that package is considered to be the workspace. It affects the filename hash
+so that artifacts produced by the wrapper are cached separately. See
+<a href="config.html#buildrustc-workspace-wrapper"><code>build.rustc-workspace-wrapper</code></a> to set via config. Setting this to the empty string overwrites

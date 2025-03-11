@@ -1,0 +1,10 @@
+config_version = 1
+script_dirs = ["/v1", "/one", "/suite"]
+script_names = ["${NAME}.v1", "${NAME}.one", "${NAME}.suite"]
+
+[suites.default]
+jobs = [
+    { script = "aaa", schedule = "* * * * *", dedup = true },
+    { script = "bbb", schedule = "* * * * *", dedup = true },
+    { script = "ccc", schedule = "* * * * *", dedup = true },
+]

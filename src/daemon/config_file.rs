@@ -100,9 +100,21 @@ impl TryFrom<ConfigFileV1> for Config {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use crate::daemon::config::Config;
 
     use super::*;
+
+    macro_rules! asset_path {
+        ($filename:expr) => {
+            &format!(
+                "{}/tests/assets/daemon/config/{}",
+                env::var("CARGO_MANIFEST_DIR").unwrap(),
+                $filename,
+            )
+        };
+    }
 
     #[test]
     fn test_basics() {
@@ -181,5 +193,139 @@ jobs = [
         assert_eq!(config.suites().unwrap().len(), 1);
         assert_eq!(config.suites().unwrap()[0].name(), "common");
         assert_eq!(config.suites().unwrap()[0].jobs().count(), 1);
+    }
+
+    #[test]
+    fn test_get_version() {
+        assert!(ConfigFile::get_version(asset_path!("valid/v1_empty.toml"))
+            .is_ok_and(|version| version == 1));
+
+        assert!(
+            ConfigFile::get_version(asset_path!("valid/v1_one_suite.toml"))
+                .is_ok_and(|version| version == 1)
+        );
+
+        assert!(
+            ConfigFile::get_version(asset_path!("valid/v1_two_suites.toml"))
+                .is_ok_and(|version| version == 1)
+        );
+
+        assert!(ConfigFile::get_version(asset_path!("invalid/empty_file.toml")).is_err());
+        assert!(ConfigFile::get_version(asset_path!("invalid/gibberish.toml")).is_err());
+        assert!(ConfigFile::get_version(asset_path!("invalid/small_parse_error.toml")).is_err());
+        assert!(ConfigFile::get_version(asset_path!("invalid/bad_version_empty_a.toml")).is_err());
+        assert!(ConfigFile::get_version(asset_path!("invalid/bad_version_empty_b.toml")).is_err());
+        assert!(ConfigFile::get_version(asset_path!("invalid/bad_version_empty_c.toml")).is_err());
+    }
+
+    #[test]
+    fn test_config_from_file() {
+        assert!(
+            ConfigFile::config_from_file(asset_path!("valid/v1_empty.toml")).is_ok_and(|config| {
+                assert_eq!(config.script_dirs(), &vec!["/v1_empty".to_string()]);
+                assert_eq!(config.script_names(), &vec!["${NAME}.v1_empty".to_string()]);
+                assert!(config.suites().is_none());
+                true
+            })
+        );
+
+        assert!(
+            ConfigFile::config_from_file(asset_path!("valid/v1_one_suite.toml")).is_ok_and(
+                |config| {
+                    config.suites().is_some_and(|suites| {
+                        assert_eq!(
+                            config.script_dirs(),
+                            &vec!["/v1".to_string(), "/one".to_string(), "/suite".to_string()]
+                        );
+
+                        assert_eq!(
+                            config.script_names(),
+                            &vec![
+                                "${NAME}.v1".to_string(),
+                                "${NAME}.one".to_string(),
+                                "${NAME}.suite".to_string()
+                            ]
+                        );
+
+                        assert_eq!(suites.len(), 1);
+
+                        assert!(suites.first().is_some_and(|suite| {
+                            assert_eq!(suite.name(), "default");
+                            assert_eq!(
+                                suite
+                                    .jobs()
+                                    .map(|job| job.script_name())
+                                    .collect::<Vec<_>>(),
+                                vec!["aaa", "bbb", "ccc"]
+                            );
+
+                            true
+                        }));
+
+                        true
+                    })
+                }
+            )
+        );
+
+        assert!(
+            ConfigFile::config_from_file(asset_path!("valid/v1_two_suites.toml")).is_ok_and(
+                |config| {
+                    config.suites().is_some_and(|suites| {
+                        assert_eq!(config.script_dirs(), &vec!["/v1_two_suites".to_string()],);
+                        assert_eq!(config.script_names(), &vec!["${NAME}.txt".to_string(),]);
+                        assert_eq!(suites.len(), 2);
+
+                        let suites_map: HashMap<&str, &Suite> =
+                            HashMap::from_iter(suites.iter().map(|suite| (suite.name(), suite)));
+
+                        assert!(suites_map.get("first").is_some_and(|suite| {
+                            assert_eq!(suite.name(), "first");
+
+                            assert_eq!(
+                                suite
+                                    .jobs()
+                                    .map(|job| job.script_name())
+                                    .collect::<Vec<_>>(),
+                                vec!["foo", "bar"],
+                            );
+
+                            true
+                        }));
+
+                        assert!(suites_map.get("second").is_some_and(|suite| {
+                            assert_eq!(suite.name(), "second");
+
+                            assert_eq!(
+                                suite
+                                    .jobs()
+                                    .map(|job| job.script_name())
+                                    .collect::<Vec<_>>(),
+                                vec!["baz", "qux"],
+                            );
+
+                            true
+                        }));
+
+                        true
+                    })
+                }
+            )
+        );
+
+        assert!(ConfigFile::config_from_file(asset_path!("invalid/empty_file.toml")).is_err());
+        assert!(ConfigFile::config_from_file(asset_path!("invalid/gibberish.toml")).is_err());
+        assert!(
+            ConfigFile::config_from_file(asset_path!("invalid/small_parse_error.toml")).is_err()
+        );
+        assert!(
+            ConfigFile::config_from_file(asset_path!("invalid/bad_version_empty_a.toml")).is_err()
+        );
+        assert!(
+            ConfigFile::config_from_file(asset_path!("invalid/bad_version_empty_b.toml")).is_err()
+        );
+        assert!(
+            ConfigFile::config_from_file(asset_path!("invalid/bad_version_empty_c.toml")).is_err()
+        );
     }
 }
