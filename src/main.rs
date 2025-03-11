@@ -1,11 +1,12 @@
 use std::{collections::HashMap, env, fs};
 
+use tokio::sync::mpsc;
+
 use scrapeycat::{
     effect::{self, EffectInvocation},
     scrapelang::program::run,
     Error,
 };
-use tokio::sync::mpsc;
 
 fn load_script(name_or_filename: &str) -> Result<String, Error> {
     fs::read_to_string(name_or_filename)
