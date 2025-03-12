@@ -5,15 +5,14 @@ use std::{
 };
 
 use chrono::Local;
+use flagset::{flags, FlagSet};
+use suite::Suite;
+use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 pub mod config;
 pub mod config_file;
 pub mod cron;
 pub mod suite;
-
-use flagset::{flags, FlagSet};
-use suite::Suite;
-use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 use crate::{
     effect::{EffectInvocation, EffectOptions, EffectSignature},
