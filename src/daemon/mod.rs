@@ -16,8 +16,7 @@ pub mod suite;
 
 use crate::{
     effect::{EffectInvocation, EffectOptions, EffectSignature},
-    scrapelang::program::run,
-    Error,
+    scrapelang::program::{run, ScriptLoaderPointer},
 };
 
 flags! {
@@ -75,7 +74,7 @@ async fn effects_handler(
 // TODO: it would be cool if the daemon could pick up changes to the config automatically
 pub async fn run_forever(
     suites: Vec<Suite>,
-    script_loader: fn(&str) -> Result<String, Error>,
+    script_loader: ScriptLoaderPointer,
     effects: HashMap<String, EffectSignature>,
 ) {
     let jobs = suites
@@ -112,13 +111,14 @@ pub async fn run_forever(
                 let task_args = job.args().clone();
                 let task_kwargs = job.kwargs().clone();
                 let task_effect_sender = effect_tx.clone();
+                let task_script_loader = script_loader.clone();
 
                 tokio::spawn(async move {
                     let _ = run(
                         &task_script_name,
                         task_args,
                         task_kwargs,
-                        script_loader,
+                        task_script_loader,
                         task_effect_sender,
                     )
                     .await;
@@ -134,7 +134,10 @@ pub async fn run_forever(
 mod tests {
     use std::{
         env, fs,
-        sync::atomic::{AtomicU32, Ordering::SeqCst},
+        sync::{
+            atomic::{AtomicU32, Ordering::SeqCst},
+            Arc, RwLock,
+        },
     };
 
     use flagset::FlagSet;
@@ -142,11 +145,12 @@ mod tests {
     use crate::{
         daemon::{cron::CronSpec, suite::Job},
         effect::{EffectArgs, EffectKwArgs},
+        Error,
     };
 
     use super::*;
 
-    fn load_script(name_or_filename: &str) -> Result<String, Error> {
+    fn script_loader(name_or_filename: &str) -> Result<String, Error> {
         fs::read_to_string(name_or_filename).map_err(|e| {
             eprintln!("error loading {name_or_filename}: {e}");
             e.into()
@@ -183,7 +187,11 @@ mod tests {
         let effects: HashMap<String, EffectSignature> =
             HashMap::from([("print".to_string(), print as EffectSignature)]);
 
-        let task_handle = tokio::spawn(run_forever(vec![suite], load_script, effects));
+        let task_handle = tokio::spawn(run_forever(
+            vec![suite],
+            Arc::new(RwLock::new(script_loader)),
+            effects,
+        ));
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         assert_eq!(TEST_PRINT_ONCE_PER_SECOND_COUNT.load(SeqCst), 1);
@@ -227,7 +235,11 @@ mod tests {
         let effects: HashMap<String, EffectSignature> =
             HashMap::from([("print".to_string(), print as EffectSignature)]);
 
-        let task_handle = tokio::spawn(run_forever(vec![suite], load_script, effects));
+        let task_handle = tokio::spawn(run_forever(
+            vec![suite],
+            Arc::new(RwLock::new(script_loader)),
+            effects,
+        ));
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         assert_eq!(TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.load(SeqCst), 1);

@@ -48,4 +48,7 @@ pub enum Error {
 
     #[error("Unsupported config version")]
     UnsupportedConfigVersionError,
+
+    #[error("Script loader locking error")]
+    ScriptLoaderLockingError,
 }

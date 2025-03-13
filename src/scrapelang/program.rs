@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use im::{vector, Vector};
 use regex::Regex;
@@ -15,14 +18,25 @@ use crate::{
     Error,
 };
 
+pub type ScriptLoaderPointer = Arc<RwLock<dyn Fn(&str) -> Result<String, Error> + Send + Sync>>;
+
 pub async fn run(
     script_name: &str,
     args: Vec<String>,
     kwargs: HashMap<String, String>,
-    script_loader: fn(&str) -> Result<String, Error>,
+    script_loader: ScriptLoaderPointer,
     effect_sender: UnboundedSender<EffectInvocation>,
 ) -> Result<Vector<String>, Error> {
-    let script = script_loader(script_name)?;
+    let script = {
+        let locked_loader_fn = script_loader
+            .read()
+            .map_err(|_| Error::ScriptLoaderLockingError)?;
+
+        locked_loader_fn(script_name)?
+
+        // Lock dropped here
+    };
+
     let code = strip_comments(&script);
     let tokens = lex(&code)?;
     let program = parse(&tokens)?;
@@ -154,7 +168,7 @@ pub async fn run(
                         &job_name,
                         args_subst,
                         kwargs_subst,
-                        script_loader,
+                        script_loader.clone(),
                         effect_sender.clone(),
                     ))
                     .await?,

@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fs};
+use std::{
+    collections::HashMap,
+    fs,
+    sync::{Arc, RwLock},
+};
 
 use clap::Parser;
 use regex::Regex;
@@ -60,10 +64,18 @@ async fn main() {
 
             let (posargs, kwargs) = split_posargs_and_kwargs(args);
 
-            println!(
-                "{:#?}",
-                run(&script, posargs, kwargs, load_script, effects_sender).await
-            );
+            match run(
+                &script,
+                posargs,
+                kwargs,
+                Arc::new(RwLock::new(load_script)),
+                effects_sender,
+            )
+            .await
+            {
+                Ok(results) => println!("{results:#?}"),
+                Err(e) => eprintln!("{e}"),
+            }
 
             let _ = tokio::join!(effects_runner_task);
         }
