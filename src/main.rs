@@ -9,7 +9,8 @@ use regex::Regex;
 use tokio::sync::mpsc;
 
 use scrapeycat::{
-    effect::{self, EffectInvocation},
+    daemon::{self, config_file::ConfigFile},
+    effect::{self, EffectInvocation, EffectSignature},
     scrapelang::program::run,
     Error,
 };
@@ -80,7 +81,19 @@ async fn main() {
             let _ = tokio::join!(effects_runner_task);
         }
 
-        Cli::Daemon { config: _ } => todo!(),
+        Cli::Daemon { config } => match ConfigFile::config_from_file(&config) {
+            Ok(config) => {
+                daemon::run_config(
+                    config,
+                    HashMap::from([
+                        ("print".to_string(), effect::print as EffectSignature),
+                        ("notify".to_string(), effect::notify as EffectSignature),
+                    ]),
+                )
+                .await;
+            }
+            Err(e) => eprintln!("{e}"),
+        },
     }
 }
 

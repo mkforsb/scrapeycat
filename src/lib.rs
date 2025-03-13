@@ -13,6 +13,9 @@ pub enum Error {
     #[error("IO error: {0}")]
     IOError(#[from] io::Error),
 
+    #[error("Script not found: {0}")]
+    ScriptNotFoundError(String),
+
     #[error("Fetch error: {0}")]
     FetchError(#[from] reqwest::Error),
 

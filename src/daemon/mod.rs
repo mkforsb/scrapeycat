@@ -1,6 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
+    fs,
     hash::{DefaultHasher, Hash, Hasher},
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -15,8 +17,10 @@ pub mod cron;
 pub mod suite;
 
 use crate::{
+    daemon::config::Config,
     effect::{EffectInvocation, EffectOptions, EffectSignature},
     scrapelang::program::{run, ScriptLoaderPointer},
+    Error,
 };
 
 flags! {
@@ -68,6 +72,51 @@ async fn effects_handler(
             }
             None => return,
         }
+    }
+}
+
+#[expect(unused)]
+pub async fn run_config(config: Config, effects: HashMap<String, EffectSignature>) {
+    fn substitute_variables(text: String, path: &str) -> String {
+        text.replace("${NAME}", path).replace(
+            "${HOME}",
+            dirs::home_dir()
+                .expect("Should be able to find user's home directory path")
+                .to_str()
+                .expect("Home directory path should be valid unicode"),
+        )
+    }
+
+    let mut config = config;
+
+    if let Some(suites) = config.suites {
+        let script_dirs = config.script_dirs;
+        let script_names = config.script_names;
+
+        let script_loader = move |path: &str| {
+            if let Some(script) = script_dirs
+                .iter()
+                .flat_map(|dir| script_names.iter().map(move |name| (dir, name)))
+                .filter_map(|(dir, name)| {
+                    fs::read_to_string(substitute_variables(format!("{dir}/{name}"), path)).ok()
+                })
+                .next()
+            {
+                Ok(script)
+            } else {
+                Err(Error::ScriptNotFoundError(path.to_string()))
+            }
+        };
+
+        run_forever(
+            suites,
+            Arc::new(RwLock::new(script_loader)),
+            effects,
+            LocalMinuteIntervalClock,
+        )
+        .await
+    } else {
+        eprintln!("Warning: Daemon asked to run config containing no suite(s).")
     }
 }
 
@@ -212,7 +261,6 @@ mod tests {
     use crate::{
         daemon::{cron::CronSpec, suite::Job},
         effect::{EffectArgs, EffectKwArgs},
-        Error,
     };
 
     use super::*;
