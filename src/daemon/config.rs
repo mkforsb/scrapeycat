@@ -2,9 +2,9 @@ use crate::daemon::suite::Suite;
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    script_dirs: Vec<String>,
-    script_names: Vec<String>,
-    suites: Option<Vec<Suite>>,
+    pub script_dirs: Vec<String>,
+    pub script_names: Vec<String>,
+    pub suites: Option<Vec<Suite>>,
 }
 
 impl Config {
@@ -18,17 +18,5 @@ impl Config {
             script_names,
             suites,
         }
-    }
-
-    pub fn script_dirs(&self) -> &Vec<String> {
-        &self.script_dirs
-    }
-
-    pub fn script_names(&self) -> &Vec<String> {
-        &self.script_names
-    }
-
-    pub fn suites(&self) -> Option<&Vec<Suite>> {
-        self.suites.as_ref()
     }
 }

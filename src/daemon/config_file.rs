@@ -188,11 +188,11 @@ jobs = [
             .try_into()
             .unwrap();
 
-        assert_eq!(config.script_dirs(), &vec!["/var/scraper".to_string()]);
-        assert_eq!(config.script_names(), &vec!["${NAME}.txt".to_string()]);
-        assert_eq!(config.suites().unwrap().len(), 1);
-        assert_eq!(config.suites().unwrap()[0].name(), "common");
-        assert_eq!(config.suites().unwrap()[0].jobs().count(), 1);
+        assert_eq!(config.script_dirs, vec!["/var/scraper".to_string()]);
+        assert_eq!(config.script_names, vec!["${NAME}.txt".to_string()]);
+        assert_eq!(config.suites.as_ref().unwrap().len(), 1);
+        assert_eq!(config.suites.as_ref().unwrap()[0].name(), "common");
+        assert_eq!(config.suites.as_ref().unwrap()[0].jobs().count(), 1);
     }
 
     #[test]
@@ -222,9 +222,9 @@ jobs = [
     fn test_config_from_file() {
         assert!(
             ConfigFile::config_from_file(asset_path!("valid/v1_empty.toml")).is_ok_and(|config| {
-                assert_eq!(config.script_dirs(), &vec!["/v1_empty".to_string()]);
-                assert_eq!(config.script_names(), &vec!["${NAME}.v1_empty".to_string()]);
-                assert!(config.suites().is_none());
+                assert_eq!(config.script_dirs, vec!["/v1_empty".to_string()]);
+                assert_eq!(config.script_names, vec!["${NAME}.v1_empty".to_string()]);
+                assert!(config.suites.is_none());
                 true
             })
         );
@@ -232,15 +232,15 @@ jobs = [
         assert!(
             ConfigFile::config_from_file(asset_path!("valid/v1_one_suite.toml")).is_ok_and(
                 |config| {
-                    config.suites().is_some_and(|suites| {
+                    config.suites.is_some_and(|suites| {
                         assert_eq!(
-                            config.script_dirs(),
-                            &vec!["/v1".to_string(), "/one".to_string(), "/suite".to_string()]
+                            config.script_dirs,
+                            vec!["/v1".to_string(), "/one".to_string(), "/suite".to_string()]
                         );
 
                         assert_eq!(
-                            config.script_names(),
-                            &vec![
+                            config.script_names,
+                            vec![
                                 "${NAME}.v1".to_string(),
                                 "${NAME}.one".to_string(),
                                 "${NAME}.suite".to_string()
@@ -271,9 +271,9 @@ jobs = [
         assert!(
             ConfigFile::config_from_file(asset_path!("valid/v1_two_suites.toml")).is_ok_and(
                 |config| {
-                    config.suites().is_some_and(|suites| {
-                        assert_eq!(config.script_dirs(), &vec!["/v1_two_suites".to_string()],);
-                        assert_eq!(config.script_names(), &vec!["${NAME}.txt".to_string(),]);
+                    config.suites.is_some_and(|suites| {
+                        assert_eq!(config.script_dirs, vec!["/v1_two_suites".to_string()],);
+                        assert_eq!(config.script_names, vec!["${NAME}.txt".to_string(),]);
                         assert_eq!(suites.len(), 2);
 
                         let suites_map: HashMap<&str, &Suite> =
