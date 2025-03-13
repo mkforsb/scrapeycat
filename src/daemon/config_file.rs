@@ -15,7 +15,7 @@ use crate::{
 use super::cron::CronSpec;
 
 #[derive(Debug, Clone, Deserialize)]
-struct ConfigFile {
+pub struct ConfigFile {
     config_version: usize,
 }
 
