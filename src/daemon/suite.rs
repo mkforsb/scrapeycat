@@ -84,7 +84,11 @@ impl Job {
 
     pub fn is_due_at(&self, when: DateTime<Local>) -> bool {
         self.schedule_regex
-            .is_match(&format!("{}", when.format("%M%H%d%m0%u")))
+            .is_match(&Job::format_datetime(when).to_string())
+    }
+
+    pub fn format_datetime(when: DateTime<Local>) -> String {
+        when.format("%M%H%d%m0%u").to_string()
     }
 
     pub fn is_dedup(&self) -> bool {

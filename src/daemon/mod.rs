@@ -4,9 +4,9 @@ use std::{
     time::Duration,
 };
 
-use chrono::Local;
+use chrono::{DateTime, Local};
 use flagset::{flags, FlagSet};
-use suite::Suite;
+use suite::{Job, Suite};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 pub mod config;
@@ -71,12 +71,62 @@ async fn effects_handler(
     }
 }
 
+/// Trait for the clock of the main daemon loop in [run_forever].
+pub trait Clock {
+    /// Get the tick interval.
+    ///
+    /// The daemon will check for due jobs once per tick, but note that jobs are always
+    /// scheduled at one-minute granularity.
+    fn interval(&mut self) -> Duration;
+
+    /// Check the clock.
+    ///
+    /// This method is called exactly once per interval.
+    fn now(&mut self) -> Option<DateTime<Local>>;
+
+    /// Peek at the clock to ensure we're not oversleeping.
+    ///
+    /// This method may be called multiple times per interval and/or in the middle of
+    /// an interval. The distinction between [Clock::now] and [Clock::peek] is useful
+    /// for creating different types of mock clocks in testing.
+    fn peek(&mut self) -> Option<DateTime<Local>>;
+
+    /// Sleep for some time.
+    #[allow(async_fn_in_trait)]
+    async fn sleep(&mut self, time: Duration);
+}
+
+/// The default local clock with a one-minute interval.
+#[derive(Default)]
+pub struct LocalMinuteIntervalClock;
+
+impl Clock for LocalMinuteIntervalClock {
+    fn interval(&mut self) -> Duration {
+        Duration::from_secs(60)
+    }
+
+    fn now(&mut self) -> Option<DateTime<Local>> {
+        Some(Local::now())
+    }
+
+    fn peek(&mut self) -> Option<DateTime<Local>> {
+        Some(Local::now())
+    }
+
+    async fn sleep(&mut self, time: Duration) {
+        tokio::time::sleep(time).await
+    }
+}
+
 // TODO: it would be cool if the daemon could pick up changes to the config automatically
 pub async fn run_forever(
     suites: Vec<Suite>,
     script_loader: ScriptLoaderPointer,
     effects: HashMap<String, EffectSignature>,
+    mut clock: impl Clock,
 ) {
+    let interval = clock.interval();
+
     let jobs = suites
         .iter()
         .flat_map(|suite| {
@@ -103,10 +153,14 @@ pub async fn run_forever(
         .collect::<Vec<_>>();
 
     loop {
-        let now = Local::now();
+        let datetime_top = clock.now();
+
+        if datetime_top.is_none() {
+            break;
+        }
 
         for (job, effect_tx, _) in &jobs {
-            if job.is_due_at(now) {
+            if job.is_due_at(datetime_top.expect("`datetime_top` cannot be None")) {
                 let task_script_name = job.script_name().to_string();
                 let task_args = job.args().clone();
                 let task_kwargs = job.kwargs().clone();
@@ -126,7 +180,19 @@ pub async fn run_forever(
             }
         }
 
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        clock.sleep(interval / 2).await;
+
+        let datetime_middle = clock.peek();
+
+        if datetime_middle.is_none() {
+            break;
+        }
+
+        if Job::format_datetime(datetime_top.expect("`datetime_top` cannot be None"))
+            == Job::format_datetime(datetime_middle.expect("`datetime_middle` cannot be None"))
+        {
+            clock.sleep(interval / 2).await;
+        }
     }
 }
 
@@ -140,6 +206,7 @@ mod tests {
         },
     };
 
+    use chrono::TimeDelta;
     use flagset::FlagSet;
 
     use crate::{
@@ -157,10 +224,34 @@ mod tests {
         })
     }
 
-    static TEST_PRINT_ONCE_PER_SECOND_COUNT: AtomicU32 = AtomicU32::new(0);
+    /// A mock clock simulating a world where oversleeping never happens and thus
+    /// every single time step is always considered.
+    struct PerfectMockClock {
+        timestamps: Vec<DateTime<Local>>,
+        offset: usize,
+    }
+
+    impl Clock for PerfectMockClock {
+        fn interval(&mut self) -> Duration {
+            Duration::ZERO
+        }
+
+        fn now(&mut self) -> Option<DateTime<Local>> {
+            self.offset += 1;
+            self.timestamps.get(self.offset - 1).cloned()
+        }
+
+        fn peek(&mut self) -> Option<DateTime<Local>> {
+            self.timestamps.get(self.offset - 1).cloned()
+        }
+
+        async fn sleep(&mut self, _time: Duration) {}
+    }
+
+    static TEST_PRINT_EACH_MINUTE_COUNT: AtomicU32 = AtomicU32::new(0);
 
     #[tokio::test]
-    async fn test_print_once_per_second() {
+    async fn test_print_each_minute() {
         let suite = Suite::new(
             "default".to_string(),
             vec![Job::new(
@@ -177,38 +268,38 @@ mod tests {
             .unwrap()],
         );
 
-        TEST_PRINT_ONCE_PER_SECOND_COUNT.swap(0, SeqCst);
+        TEST_PRINT_EACH_MINUTE_COUNT.swap(0, SeqCst);
 
         fn print(_: EffectArgs, _: EffectKwArgs, _: FlagSet<EffectOptions>) -> Option<Error> {
-            TEST_PRINT_ONCE_PER_SECOND_COUNT.fetch_add(1, SeqCst);
+            TEST_PRINT_EACH_MINUTE_COUNT.fetch_add(1, SeqCst);
             None
         }
 
         let effects: HashMap<String, EffectSignature> =
             HashMap::from([("print".to_string(), print as EffectSignature)]);
 
+        let t0 = Local::now();
+
+        let clock = PerfectMockClock {
+            timestamps: vec![t0, t0 + TimeDelta::minutes(1), t0 + TimeDelta::minutes(2)],
+            offset: 0,
+        };
+
         let task_handle = tokio::spawn(run_forever(
             vec![suite],
             Arc::new(RwLock::new(script_loader)),
             effects,
+            clock,
         ));
 
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_COUNT.load(SeqCst), 1);
-
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_COUNT.load(SeqCst), 2);
-
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_COUNT.load(SeqCst), 3);
-
-        task_handle.abort();
+        let _ = tokio::join!(task_handle);
+        assert_eq!(TEST_PRINT_EACH_MINUTE_COUNT.load(SeqCst), 3);
     }
 
-    static TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT: AtomicU32 = AtomicU32::new(0);
+    static TEST_PRINT_EACH_MINUTE_DEDUP_COUNT: AtomicU32 = AtomicU32::new(0);
 
     #[tokio::test]
-    async fn test_print_once_per_second_dedup() {
+    async fn test_print_each_minute_dedup() {
         let suite = Suite::new(
             "default".to_string(),
             vec![Job::new(
@@ -225,31 +316,31 @@ mod tests {
             .unwrap()],
         );
 
-        TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.swap(0, SeqCst);
+        TEST_PRINT_EACH_MINUTE_DEDUP_COUNT.swap(0, SeqCst);
 
         fn print(_: EffectArgs, _: EffectKwArgs, _: FlagSet<EffectOptions>) -> Option<Error> {
-            TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.fetch_add(1, SeqCst);
+            TEST_PRINT_EACH_MINUTE_DEDUP_COUNT.fetch_add(1, SeqCst);
             None
         }
 
         let effects: HashMap<String, EffectSignature> =
             HashMap::from([("print".to_string(), print as EffectSignature)]);
 
+        let t0 = Local::now();
+
+        let clock = PerfectMockClock {
+            timestamps: vec![t0, t0 + TimeDelta::minutes(1), t0 + TimeDelta::minutes(2)],
+            offset: 0,
+        };
+
         let task_handle = tokio::spawn(run_forever(
             vec![suite],
             Arc::new(RwLock::new(script_loader)),
             effects,
+            clock,
         ));
 
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.load(SeqCst), 1);
-
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.load(SeqCst), 1);
-
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        assert_eq!(TEST_PRINT_ONCE_PER_SECOND_DEDUP_COUNT.load(SeqCst), 1);
-
-        task_handle.abort();
+        let _ = tokio::join!(task_handle);
+        assert_eq!(TEST_PRINT_EACH_MINUTE_DEDUP_COUNT.load(SeqCst), 1);
     }
 }
