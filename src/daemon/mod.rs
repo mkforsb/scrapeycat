@@ -248,6 +248,35 @@ mod tests {
         async fn sleep(&mut self, _time: Duration) {}
     }
 
+    /// A mock clock specifically designed for the implementation detail where [run_forever]
+    /// peeks at the clock once after having tried to sleep for half the interval, and
+    /// then tries to sleep for another half of the interval unless the clock has already
+    /// reached a new minute value.
+    struct HalfIntervalPeekMockClock {
+        /// Timestamps T[n] such that after having slept a total of n times, calling
+        /// [Clock::now] or [Clock::peek] will return T[n].
+        timestamps: Vec<DateTime<Local>>,
+        times_slept: usize,
+    }
+
+    impl Clock for HalfIntervalPeekMockClock {
+        fn interval(&mut self) -> Duration {
+            Duration::ZERO
+        }
+
+        fn now(&mut self) -> Option<DateTime<Local>> {
+            self.timestamps.get(self.times_slept).cloned()
+        }
+
+        fn peek(&mut self) -> Option<DateTime<Local>> {
+            self.timestamps.get(self.times_slept).cloned()
+        }
+
+        async fn sleep(&mut self, _time: Duration) {
+            self.times_slept += 1;
+        }
+    }
+
     static TEST_PRINT_EACH_MINUTE_COUNT: AtomicU32 = AtomicU32::new(0);
 
     #[tokio::test]
@@ -342,5 +371,70 @@ mod tests {
 
         let _ = tokio::join!(task_handle);
         assert_eq!(TEST_PRINT_EACH_MINUTE_DEDUP_COUNT.load(SeqCst), 1);
+    }
+
+    static TEST_PRINT_EACH_MINUTE_OVERSLEEP_COUNT: AtomicU32 = AtomicU32::new(0);
+
+    #[tokio::test]
+    async fn test_print_each_minute_oversleep() {
+        let suite = Suite::new(
+            "default".to_string(),
+            vec![Job::new(
+                "default",
+                format!(
+                    "{}/scripts/print.scrape",
+                    env::var("CARGO_MANIFEST_DIR").unwrap()
+                ),
+                None,
+                None,
+                "* * * * *".parse::<CronSpec>().unwrap(),
+                false,
+            )
+            .unwrap()],
+        );
+
+        TEST_PRINT_EACH_MINUTE_OVERSLEEP_COUNT.swap(0, SeqCst);
+
+        fn print(_: EffectArgs, _: EffectKwArgs, _: FlagSet<EffectOptions>) -> Option<Error> {
+            TEST_PRINT_EACH_MINUTE_OVERSLEEP_COUNT.fetch_add(1, SeqCst);
+            None
+        }
+
+        let effects: HashMap<String, EffectSignature> =
+            HashMap::from([("print".to_string(), print as EffectSignature)]);
+
+        let t0 = Local::now();
+
+        let clock = HalfIntervalPeekMockClock {
+            timestamps: vec![
+                // first response to .now()
+                t0,
+                // * half-interval sleep *
+
+                // overslept!
+                // first response to .peek()
+                // second response to .now()
+                t0 + TimeDelta::minutes(1),
+                // * half-interval sleep *
+
+                // second response to .peek()
+                t0 + TimeDelta::minutes(1),
+                // * half-interval sleep *
+
+                // third response to .now()
+                t0 + TimeDelta::minutes(2),
+            ],
+            times_slept: 0,
+        };
+
+        let task_handle = tokio::spawn(run_forever(
+            vec![suite],
+            Arc::new(RwLock::new(script_loader)),
+            effects,
+            clock,
+        ));
+
+        let _ = tokio::join!(task_handle);
+        assert_eq!(TEST_PRINT_EACH_MINUTE_OVERSLEEP_COUNT.load(SeqCst), 3);
     }
 }
