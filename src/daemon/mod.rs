@@ -286,18 +286,14 @@ pub async fn run_forever(
 #[cfg(test)]
 mod tests {
     use std::{
-        env, fs,
-        sync::{
-            atomic::{AtomicU32, Ordering::SeqCst},
-            Arc, RwLock,
-        },
+        env,
+        sync::atomic::{AtomicU32, Ordering::SeqCst},
     };
 
     use chrono::TimeDelta;
-    use flagset::FlagSet;
 
     use crate::{
-        daemon::{cron::CronSpec, suite::Job},
+        daemon::cron::CronSpec,
         effect::{EffectArgs, EffectKwArgs},
     };
 
