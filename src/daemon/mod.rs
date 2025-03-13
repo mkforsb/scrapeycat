@@ -8,6 +8,7 @@ use std::{
 
 use chrono::{DateTime, Local};
 use flagset::{flags, FlagSet};
+use log::debug;
 use suite::{Job, Suite};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
@@ -75,8 +76,9 @@ async fn effects_handler(
     }
 }
 
-#[expect(unused)]
 pub async fn run_config(config: Config, effects: HashMap<String, EffectSignature>) {
+    debug!("daemon::run_config({config:?}, {effects:?})");
+
     fn substitute_variables(text: String, path: &str) -> String {
         text.replace("${NAME}", path).replace(
             "${HOME}",
@@ -87,23 +89,33 @@ pub async fn run_config(config: Config, effects: HashMap<String, EffectSignature
         )
     }
 
-    let mut config = config;
-
     if let Some(suites) = config.suites {
         let script_dirs = config.script_dirs;
         let script_names = config.script_names;
 
         let script_loader = move |path: &str| {
+            debug!("daemon::run_config::script_loader({path})");
+
             if let Some(script) = script_dirs
                 .iter()
                 .flat_map(|dir| script_names.iter().map(move |name| (dir, name)))
                 .filter_map(|(dir, name)| {
+                    debug!(
+                        "daemon::run_config::script_loader({path}) try {}",
+                        substitute_variables(format!("{dir}/{name}"), path)
+                    );
+
                     fs::read_to_string(substitute_variables(format!("{dir}/{name}"), path)).ok()
                 })
                 .next()
             {
+                debug!(
+                    "daemon::run_config::script_loader({path}) -> Ok ({} bytes)",
+                    script.len()
+                );
                 Ok(script)
             } else {
+                debug!("daemon::run_config::script_loader({path}) -> Not found");
                 Err(Error::ScriptNotFoundError(path.to_string()))
             }
         };
@@ -174,6 +186,8 @@ pub async fn run_forever(
     effects: HashMap<String, EffectSignature>,
     mut clock: impl Clock,
 ) {
+    debug!("daemon::run_forever({suites:?}, {effects:?})");
+
     let interval = clock.interval();
 
     let jobs = suites
@@ -188,6 +202,7 @@ pub async fn run_forever(
 
                 let (tx, rx) = mpsc::unbounded_channel::<EffectInvocation>();
                 (
+                    suite.name(),
                     job,
                     tx,
                     tokio::spawn(effects_handler(
@@ -201,6 +216,8 @@ pub async fn run_forever(
         })
         .collect::<Vec<_>>();
 
+    debug!("daemon::run_forever: jobs ({}): {jobs:?}", jobs.len());
+
     loop {
         let datetime_top = clock.now();
 
@@ -208,8 +225,22 @@ pub async fn run_forever(
             break;
         }
 
-        for (job, effect_tx, _) in &jobs {
+        for (suite, job, effect_tx, _) in &jobs {
+            debug!(
+                "daemon::run_forever::loop: check {}.{}-{}",
+                suite,
+                job.name(),
+                job.script_name()
+            );
+
             if job.is_due_at(datetime_top.expect("`datetime_top` cannot be None")) {
+                debug!(
+                    "daemon::run_forever::loop: execute {}.{}-{}",
+                    suite,
+                    job.name(),
+                    job.script_name()
+                );
+
                 let task_script_name = job.script_name().to_string();
                 let task_args = job.args().clone();
                 let task_kwargs = job.kwargs().clone();
@@ -226,6 +257,13 @@ pub async fn run_forever(
                     )
                     .await;
                 });
+            } else {
+                debug!(
+                    "daemon::run_forever::loop: skip {}.{}-{}",
+                    suite,
+                    job.name(),
+                    job.script_name()
+                );
             }
         }
 

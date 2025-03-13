@@ -5,7 +5,9 @@ use std::{
 };
 
 use clap::Parser;
+use log::{debug, error};
 use regex::Regex;
+use stderrlog::Timestamp;
 use tokio::sync::mpsc;
 
 use scrapeycat::{
@@ -22,10 +24,16 @@ enum Cli {
 
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
+
+        #[arg(short, long, required = false)]
+        debug: bool,
     },
 
     Daemon {
         config: String,
+
+        #[arg(short, long, required = false)]
+        debug: bool,
     },
 }
 
@@ -57,8 +65,28 @@ fn split_posargs_and_kwargs(args: Vec<String>) -> (Vec<String>, HashMap<String, 
 
 #[tokio::main]
 async fn main() {
+    fn init_logging(debug: bool) {
+        stderrlog::new()
+            .module(module_path!())
+            .verbosity(if debug {
+                log::Level::Debug
+            } else {
+                log::Level::Error
+            })
+            .timestamp(Timestamp::Millisecond)
+            .init()
+            .expect("Should be able to init logging");
+    }
+
     match Cli::parse() {
-        Cli::Run { script, args } => {
+        Cli::Run {
+            script,
+            args,
+            debug,
+        } => {
+            init_logging(debug);
+            debug!("Cli::Run({script}, {args:?})");
+
             let (effects_sender, effects_receiver) = mpsc::unbounded_channel::<EffectInvocation>();
             let effects_runner_task =
                 tokio::spawn(effect::default_effects_runner_task(effects_receiver));
@@ -75,25 +103,30 @@ async fn main() {
             .await
             {
                 Ok(results) => println!("{results:#?}"),
-                Err(e) => eprintln!("{e}"),
+                Err(e) => error!("{e}"),
             }
 
             let _ = tokio::join!(effects_runner_task);
         }
 
-        Cli::Daemon { config } => match ConfigFile::config_from_file(&config) {
-            Ok(config) => {
-                daemon::run_config(
-                    config,
-                    HashMap::from([
-                        ("print".to_string(), effect::print as EffectSignature),
-                        ("notify".to_string(), effect::notify as EffectSignature),
-                    ]),
-                )
-                .await;
+        Cli::Daemon { config, debug } => {
+            init_logging(debug);
+            debug!("Cli::Daemon({config})");
+
+            match ConfigFile::config_from_file(&config) {
+                Ok(config) => {
+                    daemon::run_config(
+                        config,
+                        HashMap::from([
+                            ("print".to_string(), effect::print as EffectSignature),
+                            ("notify".to_string(), effect::notify as EffectSignature),
+                        ]),
+                    )
+                    .await;
+                }
+                Err(e) => error!("{e}"),
             }
-            Err(e) => eprintln!("{e}"),
-        },
+        }
     }
 }
 
