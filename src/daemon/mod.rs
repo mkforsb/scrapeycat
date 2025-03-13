@@ -1,3 +1,8 @@
+pub mod config;
+pub mod config_file;
+pub mod cron;
+pub mod suite;
+
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -11,11 +16,6 @@ use flagset::{flags, FlagSet};
 use log::debug;
 use suite::{Job, Suite};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
-
-pub mod config;
-pub mod config_file;
-pub mod cron;
-pub mod suite;
 
 use crate::{
     daemon::config::Config,
