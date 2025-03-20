@@ -18,6 +18,10 @@ pub enum ScrapeLangToken<'a> {
         pos: TextPosition,
         pos_after: TextPosition,
     },
+    ClearHeaders {
+        pos: TextPosition,
+        pos_after: TextPosition,
+    },
     Comma {
         pos: TextPosition,
         pos_after: TextPosition,
@@ -47,6 +51,10 @@ pub enum ScrapeLangToken<'a> {
         pos_after: TextPosition,
     },
     Get {
+        pos: TextPosition,
+        pos_after: TextPosition,
+    },
+    Header {
         pos: TextPosition,
         pos_after: TextPosition,
     },
@@ -100,6 +108,7 @@ impl ScrapeLangToken<'_> {
         match self {
             ScrapeLangToken::Append { .. } => "Append",
             ScrapeLangToken::Clear { .. } => "Clear",
+            ScrapeLangToken::ClearHeaders { .. } => "ClearHeaders",
             ScrapeLangToken::Comma { .. } => "Comma",
             ScrapeLangToken::Delete { .. } => "Delete",
             ScrapeLangToken::Drop { .. } => "Drop",
@@ -108,6 +117,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::Extract { .. } => "Extract",
             ScrapeLangToken::First { .. } => "First",
             ScrapeLangToken::Get { .. } => "Get",
+            ScrapeLangToken::Header { .. } => "Header",
             ScrapeLangToken::Identifier { .. } => "Identifier",
             ScrapeLangToken::LeftParenthesis { .. } => "LeftParenthesis",
             ScrapeLangToken::Load { .. } => "Load",
@@ -125,6 +135,7 @@ impl ScrapeLangToken<'_> {
         match self {
             ScrapeLangToken::Append { pos, .. } => *pos,
             ScrapeLangToken::Clear { pos, .. } => *pos,
+            ScrapeLangToken::ClearHeaders { pos, .. } => *pos,
             ScrapeLangToken::Comma { pos, .. } => *pos,
             ScrapeLangToken::Delete { pos, .. } => *pos,
             ScrapeLangToken::Drop { pos, .. } => *pos,
@@ -133,6 +144,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::Extract { pos, .. } => *pos,
             ScrapeLangToken::First { pos, .. } => *pos,
             ScrapeLangToken::Get { pos, .. } => *pos,
+            ScrapeLangToken::Header { pos, .. } => *pos,
             ScrapeLangToken::Identifier { pos, .. } => *pos,
             ScrapeLangToken::LeftParenthesis { pos, .. } => *pos,
             ScrapeLangToken::Load { pos, .. } => *pos,
@@ -150,6 +162,7 @@ impl ScrapeLangToken<'_> {
         match self {
             ScrapeLangToken::Append { pos_after, .. } => *pos_after,
             ScrapeLangToken::Clear { pos_after, .. } => *pos_after,
+            ScrapeLangToken::ClearHeaders { pos_after, .. } => *pos_after,
             ScrapeLangToken::Comma { pos_after, .. } => *pos_after,
             ScrapeLangToken::Delete { pos_after, .. } => *pos_after,
             ScrapeLangToken::Drop { pos_after, .. } => *pos_after,
@@ -158,6 +171,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::Extract { pos_after, .. } => *pos_after,
             ScrapeLangToken::First { pos_after, .. } => *pos_after,
             ScrapeLangToken::Get { pos_after, .. } => *pos_after,
+            ScrapeLangToken::Header { pos_after, .. } => *pos_after,
             ScrapeLangToken::Identifier { pos_after, .. } => *pos_after,
             ScrapeLangToken::LeftParenthesis { pos_after, .. } => *pos_after,
             ScrapeLangToken::Load { pos_after, .. } => *pos_after,
@@ -204,12 +218,14 @@ pub fn lex(text: &str) -> Result<Vec<ScrapeLangToken>, Error> {
 
     let keyword_append = Regex::new("^append").expect("Should be a valid regex");
     let keyword_clear = Regex::new("^clear").expect("Should be a valid regex");
+    let keyword_clearheaders = Regex::new("^clearheaders").expect("Should be a valid regex");
     let keyword_delete = Regex::new("^delete").expect("Should be a valid regex");
     let keyword_drop = Regex::new("^drop").expect("Should be a valid regex");
     let keyword_extract = Regex::new("^extract").expect("Should be a valid regex");
     let keyword_effect = Regex::new("^effect").expect("Should be a valid regex");
     let keyword_first = Regex::new("^first").expect("Should be a valid regex");
     let keyword_get = Regex::new("^get").expect("Should be a valid regex");
+    let keyword_header = Regex::new("^header").expect("Should be a valid regex");
     let keyword_load = Regex::new("^load").expect("Should be a valid regex");
     let keyword_prepend = Regex::new("^prepend").expect("Should be a valid regex");
     let keyword_run = Regex::new("^run").expect("Should be a valid regex");
@@ -337,12 +353,14 @@ pub fn lex(text: &str) -> Result<Vec<ScrapeLangToken>, Error> {
     let matchers = [
         simple_matcher!(keyword_append, Append),
         simple_matcher!(keyword_clear, Clear),
+        simple_matcher!(keyword_clearheaders, ClearHeaders),
         simple_matcher!(keyword_delete, Delete),
         simple_matcher!(keyword_drop, Drop),
         simple_matcher!(keyword_effect, Effect),
         simple_matcher!(keyword_extract, Extract),
         simple_matcher!(keyword_first, First),
         simple_matcher!(keyword_get, Get),
+        simple_matcher!(keyword_header, Header),
         simple_matcher!(keyword_load, Load),
         simple_matcher!(keyword_prepend, Prepend),
         simple_matcher!(keyword_run, Run),
@@ -485,6 +503,18 @@ mod tests {
 
         assert_eq!(lex_no_ws_names("clearx"), vec!["Identifier"]);
         assert_eq!(lex_no_ws_names("clearclear"), vec!["Identifier"]);
+    }
+
+    #[test]
+    fn test_lex_clearheaders() {
+        assert_eq!(lex_no_ws_names("clearheaders"), vec!["ClearHeaders"]);
+        assert_eq!(lex_no_ws_names("  clearheaders   "), vec!["ClearHeaders"]);
+
+        assert_eq!(lex_no_ws_names("clearheadersx"), vec!["Identifier"]);
+        assert_eq!(
+            lex_no_ws_names("clearheadersclearheaders"),
+            vec!["Identifier"]
+        );
     }
 
     #[test]
@@ -656,6 +686,43 @@ mod tests {
                         pos: TextPosition { row: 1, col: 5 },
                         pos_after: TextPosition { row: 1, col: 33 },
                         str: "https://www.rust-lang.org/",
+                    }
+                ));
+                true
+            })
+        )
+    }
+
+    #[test]
+    fn test_lex_header() {
+        assert_eq!(lex_no_ws_names("header"), vec!["Header"]);
+        assert_eq!(lex_no_ws_names("  header   "), vec!["Header"]);
+
+        assert_eq!(lex_no_ws_names("headerx"), vec!["Identifier"]);
+        assert_eq!(lex_no_ws_names("headerheader"), vec!["Identifier"]);
+    }
+
+    #[test]
+    fn test_lex_header_spec() {
+        assert!(
+            lex_no_ws("header \"User-Agent\" \"Firefox\"").is_ok_and(|result| {
+                assert_eq!(result.len(), 3);
+                assert_eq!(result[0].name(), "Header");
+                assert_eq!(result[0].pos(), TextPosition { row: 1, col: 1 });
+                assert!(matches!(
+                    result[1],
+                    ScrapeLangToken::String {
+                        pos: TextPosition { row: 1, col: 8 },
+                        pos_after: TextPosition { row: 1, col: 20 },
+                        str: "User-Agent",
+                    }
+                ));
+                assert!(matches!(
+                    result[2],
+                    ScrapeLangToken::String {
+                        pos: TextPosition { row: 1, col: 21 },
+                        pos_after: TextPosition { row: 1, col: 30 },
+                        str: "Firefox",
                     }
                 ));
                 true

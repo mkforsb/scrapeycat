@@ -36,6 +36,7 @@ pub enum ScrapeLangInstruction {
         str: String,
     },
     Clear,
+    ClearHeaders,
     Delete {
         regex: String,
     },
@@ -53,6 +54,10 @@ pub enum ScrapeLangInstruction {
     First,
     Get {
         url: String,
+    },
+    Header {
+        key: String,
+        value: String,
     },
     Load {
         varname: String,
@@ -363,6 +368,22 @@ where
         )
     }
 
+    pub fn parse_clear_headers(
+        tokens: &'b [ScrapeLangToken<'a>],
+        pos: TextPosition,
+    ) -> ParseResult {
+        try_parse!(
+            tokens,
+            pos,
+            ClearHeaders,
+            "ClearHeaders",
+            |tokens: &'b [ScrapeLangToken<'a>], _: TextPosition| {
+                Self::statement_terminator(tokens.get(1))?;
+                Ok((ScrapeLangInstruction::ClearHeaders, 1))
+            }
+        )
+    }
+
     pub fn parse_delete(tokens: &'b [ScrapeLangToken<'a>], pos: TextPosition) -> ParseResult {
         try_parse!(
             tokens,
@@ -469,6 +490,29 @@ where
                         url: unescape(text),
                     },
                     3,
+                ))
+            }
+        )
+    }
+
+    pub fn parse_header(tokens: &'b [ScrapeLangToken<'a>], pos: TextPosition) -> ParseResult {
+        try_parse!(
+            tokens,
+            pos,
+            Header,
+            "Header",
+            |tokens: &'b [ScrapeLangToken<'a>], pos_after: TextPosition| {
+                let pos_after = Self::separator(tokens.get(1), pos_after)?;
+                let (key, pos_after) = Self::string(tokens.get(2), pos_after)?;
+                let pos_after = Self::separator(tokens.get(3), pos_after)?;
+                let (value, _) = Self::string(tokens.get(4), pos_after)?;
+                Self::statement_terminator(tokens.get(5))?;
+                Ok((
+                    ScrapeLangInstruction::Header {
+                        key: unescape(key),
+                        value: unescape(value),
+                    },
+                    5,
                 ))
             }
         )
@@ -588,6 +632,11 @@ where
                 result.push(instr);
                 rest = &rest[num_toks..];
             }
+            Some(ScrapeLangToken::ClearHeaders { pos, .. }) => {
+                let (instr, num_toks) = ScrapeLangInstruction::parse_clear_headers(rest, *pos)?;
+                result.push(instr);
+                rest = &rest[num_toks..];
+            }
             Some(ScrapeLangToken::Delete { pos, .. }) => {
                 let (instr, num_toks) = ScrapeLangInstruction::parse_delete(rest, *pos)?;
                 result.push(instr);
@@ -615,6 +664,11 @@ where
             }
             Some(ScrapeLangToken::Get { pos, .. }) => {
                 let (instr, num_toks) = ScrapeLangInstruction::parse_get(rest, *pos)?;
+                result.push(instr);
+                rest = &rest[num_toks..];
+            }
+            Some(ScrapeLangToken::Header { pos, .. }) => {
+                let (instr, num_toks) = ScrapeLangInstruction::parse_header(rest, *pos)?;
                 result.push(instr);
                 rest = &rest[num_toks..];
             }
@@ -696,12 +750,14 @@ mod tests {
             match (stuff.get(0), stuff.get(1)) {
                 (Some(&"append"), _) => simple!(Append, "append"),
                 (Some(&"clear"), _) => simple!(Clear, "clear"),
+                (Some(&"clearheaders"), _) => simple!(ClearHeaders, "clearheaders"),
                 (Some(&"delete"), _) => simple!(Delete, "delete"),
                 (Some(&"drop"), _) => simple!(Drop, "drop"),
                 (Some(&"effect"), _) => simple!(Effect, "effect"),
                 (Some(&"extract"), _) => simple!(Extract, "extract"),
                 (Some(&"first"), _) => simple!(First, "first"),
                 (Some(&"get"), _) => simple!(Get, "get"),
+                (Some(&"header"), _) => simple!(Header, "header"),
                 (Some(&"load"), _) => simple!(Load, "load"),
                 (Some(&"prepend"), _) => simple!(Prepend, "prepend"),
                 (Some(&"run"), _) => simple!(Run, "run"),
@@ -763,6 +819,16 @@ mod tests {
             assert_eq!(result[0], ScrapeLangInstruction::Clear);
             true
         }));
+    }
+
+    #[test]
+    pub fn test_parse_clear_headers() {
+        assert!(
+            parse(tokenseq(&["clearheaders"]).as_slice()).is_ok_and(|result| {
+                assert_eq!(result[0], ScrapeLangInstruction::ClearHeaders);
+                true
+            })
+        );
     }
 
     #[test]
@@ -1012,6 +1078,30 @@ mod tests {
                     true
                 })
         );
+    }
+
+    #[test]
+    pub fn test_parse_header() {
+        assert!(parse(
+            tokenseq(&[
+                "header",
+                "space",
+                "string User-Agent",
+                "space",
+                "string Chromium"
+            ])
+            .as_slice()
+        )
+        .is_ok_and(|result| {
+            assert_eq!(
+                result[0],
+                ScrapeLangInstruction::Header {
+                    key: "User-Agent".to_string(),
+                    value: "Chromium".to_string(),
+                }
+            );
+            true
+        }));
     }
 
     #[test]

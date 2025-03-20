@@ -59,6 +59,7 @@ pub async fn run(
                 scraper = scraper.append(&substitute_variables(&str, &variables)?)
             }
             ScrapeLangInstruction::Clear => scraper = scraper.clear(),
+            ScrapeLangInstruction::ClearHeaders => scraper = scraper.clear_headers(),
             ScrapeLangInstruction::Delete { regex } => {
                 scraper = scraper.delete(&substitute_variables(&regex, &variables)?)?
             }
@@ -110,6 +111,12 @@ pub async fn run(
                 scraper = scraper
                     .get(&substitute_variables(&url, &variables)?)
                     .await?
+            }
+            ScrapeLangInstruction::Header { key, value } => {
+                scraper = scraper.set_header(
+                    substitute_variables(&key, &variables)?,
+                    substitute_variables(&value, &variables)?,
+                )
             }
             ScrapeLangInstruction::Load { varname } => {
                 let mut new_results = scraper.results().clone();

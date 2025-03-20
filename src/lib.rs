@@ -54,4 +54,7 @@ pub enum Error {
 
     #[error("Script loader locking error")]
     ScriptLoaderLockingError,
+
+    #[error("HTTP driver error: {0}")]
+    HTTPDriverError(String),
 }

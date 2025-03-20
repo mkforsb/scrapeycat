@@ -1,14 +1,23 @@
 use std::{cmp::min, marker::PhantomData};
 
-use im::{vector, Vector};
+use im::{vector, HashMap, Vector};
 use regex::Regex;
+use reqwest::{
+    header::{HeaderMap, HeaderName, InvalidHeaderValue},
+    ClientBuilder,
+};
 
 use crate::Error;
 
+#[derive(Debug)]
+pub enum HttpHeaders<'a> {
+    NoHeaders,
+    Headers(&'a HashMap<String, String>),
+}
+
 #[allow(async_fn_in_trait)]
 pub trait HttpDriver: Clone {
-    // TODO: headers
-    async fn get(url: &str) -> Result<String, Error>;
+    async fn get(url: &str, headers: HttpHeaders<'_>) -> Result<String, Error>;
 
     // TODO: post(url, content)
 
@@ -19,14 +28,33 @@ pub trait HttpDriver: Clone {
 pub struct ReqwestHttpDriver;
 
 impl HttpDriver for ReqwestHttpDriver {
-    async fn get(url: &str) -> Result<String, Error> {
-        Ok(reqwest::get(url).await?.text().await?)
+    async fn get(url: &str, headers: HttpHeaders<'_>) -> Result<String, Error> {
+        let mut reqwest_headers = HeaderMap::new();
+
+        if let HttpHeaders::Headers(map) = headers {
+            for (key, value) in map {
+                reqwest_headers.insert(
+                    HeaderName::from_bytes(key.as_bytes())
+                        .map_err(|e| Error::HTTPDriverError(e.to_string()))?,
+                    value
+                        .parse()
+                        .map_err(|e: InvalidHeaderValue| Error::HTTPDriverError(e.to_string()))?,
+                );
+            }
+        }
+
+        let client = ClientBuilder::new()
+            .default_headers(reqwest_headers)
+            .build()?;
+
+        Ok(client.get(url).send().await?.text().await?)
     }
 }
 
 #[derive(Clone)]
 pub struct Scraper<H: HttpDriver> {
     results: Vector<String>,
+    headers: HashMap<String, String>,
     _marker: PhantomData<H>,
 }
 
@@ -61,8 +89,6 @@ where
 // result.append("   $join S          Join all results to a single string using S as glue")
 // result.append("   $jsonpath E      Replace each result R with json.enc(E.find(json.dec(R)))")
 // result.append("   $jsonvals E      Replace results with [x for x in E.find(json.dec(R)) for R in results]")
-// result.append("   $header S        Add an HTTP header on the form Header: value")
-// result.append("   $clearheaders    Clear all HTTP headers")
 
 impl<H> Scraper<H>
 where
@@ -71,6 +97,7 @@ where
     pub fn new() -> Scraper<H> {
         Scraper {
             results: Vector::new(),
+            headers: HashMap::new(),
             _marker: PhantomData,
         }
     }
@@ -86,7 +113,7 @@ where
     pub async fn get(&self, url: &str) -> Result<Scraper<H>, Error> {
         let mut new_results = self.results.clone();
 
-        new_results.push_back(H::get(url).await?);
+        new_results.push_back(H::get(url, HttpHeaders::Headers(&self.headers)).await?);
 
         Ok(Scraper::<H> {
             results: new_results,
@@ -229,6 +256,20 @@ where
             ..self.clone()
         }
     }
+
+    pub fn set_header(&self, key: String, value: String) -> Scraper<H> {
+        Scraper {
+            headers: self.headers.update(key, value),
+            ..self.clone()
+        }
+    }
+
+    pub fn clear_headers(&self) -> Scraper<H> {
+        Scraper {
+            headers: HashMap::new(),
+            ..self.clone()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -253,8 +294,24 @@ mod tests {
     pub struct NullHttpDriver;
 
     impl HttpDriver for NullHttpDriver {
-        async fn get(_url: &str) -> Result<String, Error> {
+        async fn get(_url: &str, _headers: HttpHeaders<'_>) -> Result<String, Error> {
             Ok("".to_string())
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct HeaderTestingHttpDriver;
+
+    impl HttpDriver for HeaderTestingHttpDriver {
+        async fn get(_url: &str, headers: HttpHeaders<'_>) -> Result<String, Error> {
+            Ok(match headers {
+                HttpHeaders::NoHeaders => "".to_string(),
+                HttpHeaders::Headers(map) => map
+                    .iter()
+                    .map(|(key, value)| format!("[{key}]:[{value}]"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            })
         }
     }
 
@@ -408,5 +465,64 @@ mod tests {
 
         assert_eq!(s1.clear().results, no_results());
         assert_eq!(s2.clear().results, no_results());
+    }
+
+    #[tokio::test]
+    async fn test_set_header() {
+        let scraper = Scraper::<HeaderTestingHttpDriver>::new()
+            .get("foo")
+            .await
+            .unwrap();
+
+        assert_eq!(scraper.results.len(), 1);
+
+        assert!(!scraper
+            .results
+            .get(0)
+            .unwrap()
+            .contains("[User-Agent]:[Scrapeycat 1.2.3]"));
+
+        assert!(!scraper
+            .results
+            .get(0)
+            .unwrap()
+            .contains("[Accept-Charset]:[utf-8]"));
+
+        let scraper = Scraper::<HeaderTestingHttpDriver>::new()
+            .set_header("User-Agent".to_string(), "Scrapeycat 1.2.3".to_string())
+            .set_header("Accept-Charset".to_string(), "utf-8".to_string())
+            .get("foo")
+            .await
+            .unwrap();
+
+        assert_eq!(scraper.results.len(), 1);
+
+        assert!(scraper
+            .results
+            .get(0)
+            .unwrap()
+            .contains("[User-Agent]:[Scrapeycat 1.2.3]"));
+
+        assert!(scraper
+            .results
+            .get(0)
+            .unwrap()
+            .contains("[Accept-Charset]:[utf-8]"));
+    }
+
+    #[tokio::test]
+    async fn test_clear_headers() {
+        let scraper = Scraper::<HeaderTestingHttpDriver>::new()
+            .set_header("User-Agent".to_string(), "Scrapeycat 1.2.3".to_string())
+            .clear_headers()
+            .get("foo")
+            .await
+            .unwrap();
+
+        assert!(!scraper
+            .results
+            .get(0)
+            .unwrap()
+            .contains("[User-Agent]:[Scrapeycat 1.2.3]"));
     }
 }
