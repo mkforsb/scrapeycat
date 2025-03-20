@@ -161,26 +161,26 @@ where
         }
     }
 
-    pub fn last(&self) -> Result<Scraper<H>, Error> {
-        Ok(Scraper {
+    pub fn last(&self) -> Scraper<H> {
+        Scraper {
             results: if self.results.is_empty() {
                 vector![]
             } else {
                 vector![self.results.back().unwrap().clone()]
             },
             ..self.clone()
-        })
+        }
     }
 
-    pub fn take(&self, n: usize) -> Result<Scraper<H>, Error> {
-        Ok(Scraper {
+    pub fn take(&self, n: usize) -> Scraper<H> {
+        Scraper {
             results: if self.results.is_empty() {
                 vector![]
             } else {
                 self.results.take(min(n, self.results.len()))
             },
             ..self.clone()
-        })
+        }
     }
 
     pub fn drop(&self, n: usize) -> Scraper<H> {
@@ -194,15 +194,15 @@ where
         }
     }
 
-    pub fn prepend(&self, prefix: &str) -> Result<Scraper<H>, Error> {
-        Ok(Scraper {
+    pub fn prepend(&self, prefix: &str) -> Scraper<H> {
+        Scraper {
             results: self
                 .results
                 .iter()
                 .map(|str| format!("{prefix}{str}").to_string())
                 .collect(),
             ..self.clone()
-        })
+        }
     }
 
     pub fn append(&self, suffix: &str) -> Scraper<H> {
@@ -216,8 +216,8 @@ where
         }
     }
 
-    pub fn join(&self, separator: &str) -> Result<Scraper<H>, Error> {
-        Ok(Scraper {
+    pub fn join(&self, separator: &str) -> Scraper<H> {
+        Scraper {
             results: if self.results.is_empty() {
                 vector![]
             } else {
@@ -229,7 +229,7 @@ where
                     .join(separator)]
             },
             ..self.clone()
-        })
+        }
     }
 
     pub fn clear(&self) -> Scraper<H> {
@@ -329,9 +329,9 @@ mod tests {
         let s2 = nullscraper().with_results(results!["a"]);
         let s3 = nullscraper().with_results(results!["a", "b", "c"]);
 
-        assert_eq!(s1.last().unwrap().results, no_results());
-        assert_eq!(s2.last().unwrap().results, results!["a"]);
-        assert_eq!(s3.last().unwrap().results, results!["c"]);
+        assert_eq!(s1.last().results, no_results());
+        assert_eq!(s2.last().results, results!["a"]);
+        assert_eq!(s3.last().results, results!["c"]);
     }
 
     #[test]
@@ -340,13 +340,13 @@ mod tests {
         let s2 = nullscraper().with_results(results!["a"]);
         let s3 = nullscraper().with_results(results!["a", "b", "c"]);
 
-        assert_eq!(s1.take(0).unwrap().results, no_results());
-        assert_eq!(s1.take(1).unwrap().results, no_results());
-        assert_eq!(s2.take(0).unwrap().results, no_results());
-        assert_eq!(s2.take(1).unwrap().results, results!["a"]);
-        assert_eq!(s2.take(7).unwrap().results, results!["a"]);
-        assert_eq!(s3.take(2).unwrap().results, results!["a", "b"]);
-        assert_eq!(s3.take(3).unwrap().results, results!["a", "b", "c"]);
+        assert_eq!(s1.take(0).results, no_results());
+        assert_eq!(s1.take(1).results, no_results());
+        assert_eq!(s2.take(0).results, no_results());
+        assert_eq!(s2.take(1).results, results!["a"]);
+        assert_eq!(s2.take(7).results, results!["a"]);
+        assert_eq!(s3.take(2).results, results!["a", "b"]);
+        assert_eq!(s3.take(3).results, results!["a", "b", "c"]);
     }
 
     #[test]
@@ -374,9 +374,9 @@ mod tests {
         let s2 = nullscraper().with_results(results!["a"]);
         let s3 = nullscraper().with_results(results!["a", "b", "c"]);
 
-        assert_eq!(s1.prepend("_").unwrap().results, no_results());
-        assert_eq!(s2.prepend("_").unwrap().results, results!["_a"]);
-        assert_eq!(s3.prepend("_").unwrap().results, results!["_a", "_b", "_c"]);
+        assert_eq!(s1.prepend("_").results, no_results());
+        assert_eq!(s2.prepend("_").results, results!["_a"]);
+        assert_eq!(s3.prepend("_").results, results!["_a", "_b", "_c"]);
     }
 
     #[test]
@@ -396,9 +396,9 @@ mod tests {
         let s2 = nullscraper().with_results(results!["a"]);
         let s3 = nullscraper().with_results(results!["a", "b", "c"]);
 
-        assert_eq!(s1.join(",").unwrap().results, no_results());
-        assert_eq!(s2.join("--").unwrap().results, results!["a"]);
-        assert_eq!(s3.join("~~~").unwrap().results, results!["a~~~b~~~c"]);
+        assert_eq!(s1.join(",").results, no_results());
+        assert_eq!(s2.join("--").results, results!["a"]);
+        assert_eq!(s3.join("~~~").results, results!["a~~~b~~~c"]);
     }
 
     #[test]

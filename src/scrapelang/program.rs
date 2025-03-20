@@ -124,7 +124,7 @@ pub async fn run(
                 scraper = scraper.with_results(new_results);
             }
             ScrapeLangInstruction::Prepend { str } => {
-                scraper = scraper.prepend(&substitute_variables(&str, &variables)?)?
+                scraper = scraper.prepend(&substitute_variables(&str, &variables)?)
             }
             ScrapeLangInstruction::Store { varname } => {
                 variables.insert(varname, scraper.results().clone());
