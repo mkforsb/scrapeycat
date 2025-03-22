@@ -20,3 +20,6 @@
     - [prepend](./commands-prepend.md)
     - [run](./commands-run.md)
     - [store](./commands-store.md)
+- [Effects](./effects.md)
+    - [print](./effects-print.md)
+    - [notify](./effects-notify.md)
