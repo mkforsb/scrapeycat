@@ -1,7 +1,7 @@
 # The `delete` command
 
 ```haskell
-delete "regex"
+delete "regex pattern"
 ```
 
 The `delete` command takes a regular expression (provided as a string), searches each current

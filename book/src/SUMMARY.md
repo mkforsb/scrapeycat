@@ -3,6 +3,8 @@
 # User Guide
 - [Introduction](./introduction.md)
 - [Getting Started](./getting-started.md)
+    - [Writing and Running Scripts](./getting-started-scripts.md)
+    - [Running the Daemon](./getting-started-daemon.md)
 
 # Reference
 - [Commands](./commands.md)
@@ -21,5 +23,5 @@
     - [run](./commands-run.md)
     - [store](./commands-store.md)
 - [Effects](./effects.md)
-    - [print](./effects-print.md)
     - [notify](./effects-notify.md)
+    - [print](./effects-print.md)
