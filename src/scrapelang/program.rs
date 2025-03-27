@@ -60,17 +60,19 @@ fn step<H: HttpDriver>(
             args,
             kwargs,
         } => {
-            // TODO: use results as args if args are empty
-            let args_subst = args
-                .iter()
-                .map(|x| match x {
-                    ScrapeLangArgument::String { str } => substitute_variables(str, variables),
-                    ScrapeLangArgument::Identifier { name } => variables
-                        .get(name)
-                        .ok_or(Error::VariableNotFoundError(name.to_string()))
-                        .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let args_subst = if !args.is_empty() {
+                args.iter()
+                    .map(|x| match x {
+                        ScrapeLangArgument::String { str } => substitute_variables(str, variables),
+                        ScrapeLangArgument::Identifier { name } => variables
+                            .get(name)
+                            .ok_or(Error::VariableNotFoundError(name.to_string()))
+                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                scraper.results().iter().cloned().collect::<Vec<_>>()
+            };
 
             let kwargs_subst: HashMap<String, String> = kwargs
                 .iter()
@@ -130,17 +132,19 @@ fn step<H: HttpDriver>(
             args,
             kwargs,
         } => {
-            // TODO: use results as args if args are empty
-            let args_subst = args
-                .iter()
-                .map(|x| match x {
-                    ScrapeLangArgument::String { str } => substitute_variables(str, variables),
-                    ScrapeLangArgument::Identifier { name } => variables
-                        .get(name)
-                        .ok_or(Error::VariableNotFoundError(name.to_string()))
-                        .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let args_subst = if !args.is_empty() {
+                args.iter()
+                    .map(|x| match x {
+                        ScrapeLangArgument::String { str } => substitute_variables(str, variables),
+                        ScrapeLangArgument::Identifier { name } => variables
+                            .get(name)
+                            .ok_or(Error::VariableNotFoundError(name.to_string()))
+                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                scraper.results().iter().cloned().collect::<Vec<_>>()
+            };
 
             let kwargs_subst: HashMap<String, String> = kwargs
                 .iter()
@@ -276,6 +280,8 @@ fn substitute_variables(
 
 #[cfg(test)]
 mod tests {
+    use crate::scraper::NullHttpDriver;
+
     use super::*;
 
     #[test]
@@ -358,5 +364,53 @@ mod tests {
                     true
                 })
         );
+    }
+
+    #[test]
+    fn test_results_as_implicit_args_for_effect() {
+        let scraper = Scraper::<NullHttpDriver>::new()
+            .with_results(vector!["foo".to_string(), "bar".to_string()]);
+
+        assert!(step(
+            &ScrapeLangInstruction::Effect {
+                effect_name: "test".to_string(),
+                args: vec![], // no args present, results should be used
+                kwargs: HashMap::new()
+            },
+            &scraper,
+            &HashMap::new()
+        )
+        .is_ok_and(|result| {
+            matches!(
+                result,
+                StepResult::EffectInvocation(inv)
+                    if inv.name() == "test" && inv.args() == &vec!["foo", "bar"]
+            )
+        }));
+    }
+
+    #[test]
+    fn test_results_as_implicit_args_for_effect_with_explicit_args() {
+        let scraper = Scraper::<NullHttpDriver>::new()
+            .with_results(vector!["foo".to_string(), "bar".to_string()]);
+
+        assert!(step(
+            &ScrapeLangInstruction::Effect {
+                effect_name: "test".to_string(),
+                args: vec![ScrapeLangArgument::String {
+                    str: "x".to_string() // explicit args present, should override results
+                }],
+                kwargs: HashMap::new()
+            },
+            &scraper,
+            &HashMap::new()
+        )
+        .is_ok_and(|result| {
+            matches!(
+                result,
+                StepResult::EffectInvocation(inv)
+                    if inv.name() == "test" && inv.args() == &vec!["x"]
+            )
+        }));
     }
 }

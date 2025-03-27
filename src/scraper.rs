@@ -25,6 +25,15 @@ pub trait HttpDriver: Clone {
 }
 
 #[derive(Clone)]
+pub struct NullHttpDriver;
+
+impl HttpDriver for NullHttpDriver {
+    async fn get(_url: &str, _headers: HttpHeaders<'_>) -> Result<String, Error> {
+        Ok("".to_string())
+    }
+}
+
+#[derive(Clone)]
 pub struct ReqwestHttpDriver;
 
 impl HttpDriver for ReqwestHttpDriver {
@@ -288,15 +297,6 @@ mod tests {
         ($($result:expr),+$(,)?) => {
             vector![$($result.to_string()),+]
         };
-    }
-
-    #[derive(Clone)]
-    pub struct NullHttpDriver;
-
-    impl HttpDriver for NullHttpDriver {
-        async fn get(_url: &str, _headers: HttpHeaders<'_>) -> Result<String, Error> {
-            Ok("".to_string())
-        }
     }
 
     #[derive(Clone)]
