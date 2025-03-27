@@ -194,14 +194,23 @@ fn substitute_variables(
     variables: &HashMap<String, Vector<String>>,
 ) -> Result<String, Error> {
     let mut result = text.to_string();
+    let mut delta: i32 = 0;
     let matcher = Regex::new("\\{(.+?)\\}").expect("Should be a valid regex");
 
     for matched in matcher.captures_iter(text) {
         let group = matched.get(1).unwrap();
         let varname = group.as_str().to_string();
+        let matched_range = matched.get(0).unwrap().range();
+        let old_len = result.len();
 
         result.replace_range(
-            matched.get(0).unwrap().range(),
+            if delta >= 0 {
+                (matched_range.start.saturating_sub(delta as usize))
+                    ..(matched_range.end.saturating_sub(delta as usize))
+            } else {
+                (matched_range.start.saturating_add(-delta as usize))
+                    ..(matched_range.end.saturating_add(-delta as usize))
+            },
             variables
                 .get(&varname)
                 .ok_or(Error::VariableNotFoundError(varname))?
@@ -211,7 +220,96 @@ fn substitute_variables(
                 .join("")
                 .as_str(),
         );
+
+        delta += (old_len as i32) - (result.len() as i32);
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_substitute_variables_no_vars() {
+        assert_eq!(substitute_variables("", &HashMap::new()).unwrap(), "");
+        assert_eq!(
+            substitute_variables("hello world", &HashMap::new()).unwrap(),
+            "hello world"
+        );
+    }
+
+    #[test]
+    fn test_substitute_variables_missing_var() {
+        assert!(substitute_variables("{x}", &HashMap::new())
+            .is_err_and(|e| matches!(e, Error::VariableNotFoundError(_))));
+    }
+
+    #[test]
+    fn test_substitute_variables_multiple() {
+        let variables = HashMap::from([
+            ("x1".to_string(), vector!["1".to_string()]), // result gets shorter
+            ("x2".to_string(), vector!["2345".to_string()]), // result stays same length
+            ("x3".to_string(), vector!["678912".to_string()]), // result gets longer
+            ("$bar".to_string(), vector!["".to_string()]),
+        ]);
+
+        assert!(
+            substitute_variables("{x1}{x2}{x3}", &variables).is_ok_and(|result| {
+                assert_eq!(result, "12345678912");
+                true
+            })
+        );
+
+        assert!(
+            substitute_variables("{x1} {x2} {x3}", &variables).is_ok_and(|result| {
+                assert_eq!(result, "1 2345 678912");
+                true
+            })
+        );
+
+        assert!(
+            substitute_variables("{x1} {x3} {x2}", &variables).is_ok_and(|result| {
+                assert_eq!(result, "1 678912 2345");
+                true
+            })
+        );
+
+        assert!(
+            substitute_variables("{x2} {x1} {x3}", &variables).is_ok_and(|result| {
+                assert_eq!(result, "2345 1 678912");
+                true
+            })
+        );
+
+        assert!(
+            substitute_variables("{x2} {x3} {x1}", &variables).is_ok_and(|result| {
+                assert_eq!(result, "2345 678912 1");
+                true
+            })
+        );
+
+        assert!(
+            substitute_variables("{x3} {x1} {x2}", &variables).is_ok_and(|result| {
+                assert_eq!(result, "678912 1 2345");
+                true
+            })
+        );
+
+        assert!(
+            substitute_variables("{x3} {x2} {x1}", &variables).is_ok_and(|result| {
+                assert_eq!(result, "678912 2345 1");
+                true
+            })
+        );
+
+        assert!(
+            substitute_variables("x1 {x1} foo {x2} bar {$bar} {x3} baz {x1}", &variables)
+                .is_ok_and(|result| {
+                    assert_eq!(result, "x1 1 foo 2345 bar  678912 baz 1");
+                    true
+                })
+        );
+    }
 }
