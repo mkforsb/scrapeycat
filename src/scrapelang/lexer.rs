@@ -221,8 +221,8 @@ pub fn lex(text: &str) -> Result<Vec<ScrapeLangToken>, Error> {
     let keyword_clearheaders = Regex::new("^clearheaders").expect("Should be a valid regex");
     let keyword_delete = Regex::new("^delete").expect("Should be a valid regex");
     let keyword_drop = Regex::new("^drop").expect("Should be a valid regex");
-    let keyword_extract = Regex::new("^extract").expect("Should be a valid regex");
     let keyword_effect = Regex::new("^effect").expect("Should be a valid regex");
+    let keyword_extract = Regex::new("^extract").expect("Should be a valid regex");
     let keyword_first = Regex::new("^first").expect("Should be a valid regex");
     let keyword_get = Regex::new("^get").expect("Should be a valid regex");
     let keyword_header = Regex::new("^header").expect("Should be a valid regex");
