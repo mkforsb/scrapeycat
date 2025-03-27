@@ -18,6 +18,155 @@ use crate::{
     Error,
 };
 
+enum StepResult<H: HttpDriver> {
+    UpdatedScraper(Scraper<H>),
+    EffectInvocation(EffectInvocation),
+    ScriptInvocation {
+        name: String,
+        args: Vec<String>,
+        kwargs: HashMap<String, String>,
+    },
+    Get(String),
+    Store {
+        varname: String,
+        value: Vector<String>,
+    },
+}
+
+fn step<H: HttpDriver>(
+    instruction: &ScrapeLangInstruction,
+    scraper: &Scraper<H>,
+    variables: &HashMap<String, Vector<String>>,
+) -> Result<StepResult<H>, Error> {
+    match instruction {
+        ScrapeLangInstruction::Append { str } => Ok(StepResult::UpdatedScraper(
+            scraper.append(&substitute_variables(str, variables)?),
+        )),
+        ScrapeLangInstruction::Clear => Ok(StepResult::UpdatedScraper(scraper.clear())),
+        ScrapeLangInstruction::ClearHeaders => {
+            Ok(StepResult::UpdatedScraper(scraper.clear_headers()))
+        }
+        ScrapeLangInstruction::Delete { regex } => Ok(StepResult::UpdatedScraper(
+            scraper.delete(&substitute_variables(regex, variables)?)?,
+        )),
+        ScrapeLangInstruction::Drop { count } => {
+            Ok(StepResult::UpdatedScraper(scraper.drop(*count)))
+        }
+        ScrapeLangInstruction::Extract { regex } => Ok(StepResult::UpdatedScraper(
+            scraper.extract(&substitute_variables(regex, variables)?)?,
+        )),
+        ScrapeLangInstruction::Effect {
+            effect_name,
+            args,
+            kwargs,
+        } => {
+            // TODO: use results as args if args are empty
+            let args_subst = args
+                .iter()
+                .map(|x| match x {
+                    ScrapeLangArgument::String { str } => substitute_variables(str, variables),
+                    ScrapeLangArgument::Identifier { name } => variables
+                        .get(name)
+                        .ok_or(Error::VariableNotFoundError(name.to_string()))
+                        .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let kwargs_subst: HashMap<String, String> = kwargs
+                .iter()
+                .map(|(key, value)| match value {
+                    ScrapeLangArgument::String { str } => {
+                        Ok((key.clone(), substitute_variables(str, variables)?))
+                    }
+                    ScrapeLangArgument::Identifier { name } => Ok((
+                        key.clone(),
+                        variables
+                            .get(name)
+                            .ok_or(Error::VariableNotFoundError(name.to_string()))
+                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join(""))?,
+                    )),
+                })
+                .collect::<Result<HashMap<String, String>, Error>>()?;
+
+            Ok(StepResult::EffectInvocation(EffectInvocation::new(
+                effect_name,
+                args_subst,
+                kwargs_subst,
+            )))
+        }
+        ScrapeLangInstruction::First => Ok(StepResult::UpdatedScraper(scraper.first())),
+        ScrapeLangInstruction::Get { url } => {
+            Ok(StepResult::Get(substitute_variables(url, variables)?))
+        }
+        ScrapeLangInstruction::Header { key, value } => {
+            Ok(StepResult::UpdatedScraper(scraper.set_header(
+                substitute_variables(key, variables)?,
+                substitute_variables(value, variables)?,
+            )))
+        }
+        ScrapeLangInstruction::Load { varname } => {
+            let mut new_results = scraper.results().clone();
+
+            new_results.append(
+                variables
+                    .get(varname)
+                    .ok_or(Error::VariableNotFoundError(varname.to_string()))?
+                    .clone(),
+            );
+
+            Ok(StepResult::UpdatedScraper(
+                scraper.clone().with_results(new_results),
+            ))
+        }
+        ScrapeLangInstruction::Prepend { str } => Ok(StepResult::UpdatedScraper(
+            scraper.prepend(&substitute_variables(str, variables)?),
+        )),
+        ScrapeLangInstruction::Store { varname } => Ok(StepResult::Store {
+            varname: varname.to_string(),
+            value: scraper.results().clone(),
+        }),
+        ScrapeLangInstruction::Run {
+            job_name,
+            args,
+            kwargs,
+        } => {
+            // TODO: use results as args if args are empty
+            let args_subst = args
+                .iter()
+                .map(|x| match x {
+                    ScrapeLangArgument::String { str } => substitute_variables(str, variables),
+                    ScrapeLangArgument::Identifier { name } => variables
+                        .get(name)
+                        .ok_or(Error::VariableNotFoundError(name.to_string()))
+                        .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let kwargs_subst: HashMap<String, String> = kwargs
+                .iter()
+                .map(|(key, value)| match value {
+                    ScrapeLangArgument::String { str } => {
+                        Ok((key.clone(), substitute_variables(str, variables)?))
+                    }
+                    ScrapeLangArgument::Identifier { name } => Ok((
+                        key.clone(),
+                        variables
+                            .get(name)
+                            .ok_or(Error::VariableNotFoundError(name.to_string()))
+                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join(""))?,
+                    )),
+                })
+                .collect::<Result<HashMap<String, String>, Error>>()?;
+
+            Ok(StepResult::ScriptInvocation {
+                name: job_name.to_string(),
+                args: args_subst,
+                kwargs: kwargs_subst,
+            })
+        }
+    }
+}
+
 pub type ScriptLoaderPointer = Arc<RwLock<dyn Fn(&str) -> Result<String, Error> + Send + Sync>>;
 
 pub async fn run<H: HttpDriver>(
@@ -54,127 +203,21 @@ pub async fn run<H: HttpDriver>(
     let mut scraper = Scraper::<H>::new();
 
     for instruction in program {
-        match instruction {
-            ScrapeLangInstruction::Append { str } => {
-                scraper = scraper.append(&substitute_variables(&str, &variables)?)
-            }
-            ScrapeLangInstruction::Clear => scraper = scraper.clear(),
-            ScrapeLangInstruction::ClearHeaders => scraper = scraper.clear_headers(),
-            ScrapeLangInstruction::Delete { regex } => {
-                scraper = scraper.delete(&substitute_variables(&regex, &variables)?)?
-            }
-            ScrapeLangInstruction::Drop { count } => scraper = scraper.drop(count),
-            ScrapeLangInstruction::Extract { regex } => {
-                scraper = scraper.extract(&substitute_variables(&regex, &variables)?)?
-            }
-            ScrapeLangInstruction::Effect {
-                effect_name,
-                args,
-                kwargs,
-            } => {
-                // TODO: use results as args if args are empty
-                let args_subst = args
-                    .iter()
-                    .map(|x| match x {
-                        ScrapeLangArgument::String { str } => substitute_variables(str, &variables),
-                        ScrapeLangArgument::Identifier { name } => variables
-                            .get(name)
-                            .ok_or(Error::VariableNotFoundError(name.to_string()))
-                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                let kwargs_subst: HashMap<String, String> = kwargs
-                    .into_iter()
-                    .map(|(key, value)| match value {
-                        ScrapeLangArgument::String { str } => {
-                            Ok((key, substitute_variables(&str, &variables)?))
-                        }
-                        ScrapeLangArgument::Identifier { name } => Ok((
-                            key,
-                            variables
-                                .get(&name)
-                                .ok_or(Error::VariableNotFoundError(name.to_string()))
-                                .map(|v| v.iter().cloned().collect::<Vec<_>>().join(""))?,
-                        )),
-                    })
-                    .collect::<Result<HashMap<String, String>, Error>>()?;
-
-                if let Err(e) =
-                    effect_sender.send(EffectInvocation::new(effect_name, args_subst, kwargs_subst))
-                {
+        match step(&instruction, &scraper, &variables)? {
+            StepResult::UpdatedScraper(updated_scraper) => scraper = updated_scraper,
+            StepResult::EffectInvocation(effect_invocation) => {
+                if let Err(e) = effect_sender.send(effect_invocation) {
                     eprintln!("{e}");
                 }
             }
-            ScrapeLangInstruction::First => scraper = scraper.first(),
-            ScrapeLangInstruction::Get { url } => {
-                scraper = scraper
-                    .get(&substitute_variables(&url, &variables)?)
-                    .await?
-            }
-            ScrapeLangInstruction::Header { key, value } => {
-                scraper = scraper.set_header(
-                    substitute_variables(&key, &variables)?,
-                    substitute_variables(&value, &variables)?,
-                )
-            }
-            ScrapeLangInstruction::Load { varname } => {
+            StepResult::ScriptInvocation { name, args, kwargs } => {
                 let mut new_results = scraper.results().clone();
 
-                new_results.append(
-                    variables
-                        .get(&varname)
-                        .ok_or(Error::VariableNotFoundError(varname.to_string()))?
-                        .clone(),
-                );
-
-                scraper = scraper.with_results(new_results);
-            }
-            ScrapeLangInstruction::Prepend { str } => {
-                scraper = scraper.prepend(&substitute_variables(&str, &variables)?)
-            }
-            ScrapeLangInstruction::Store { varname } => {
-                variables.insert(varname, scraper.results().clone());
-            }
-            ScrapeLangInstruction::Run {
-                job_name,
-                args,
-                kwargs,
-            } => {
-                // TODO: use results as args if args are empty
-                let args_subst = args
-                    .iter()
-                    .map(|x| match x {
-                        ScrapeLangArgument::String { str } => substitute_variables(str, &variables),
-                        ScrapeLangArgument::Identifier { name } => variables
-                            .get(name)
-                            .ok_or(Error::VariableNotFoundError(name.to_string()))
-                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                let kwargs_subst: HashMap<String, String> = kwargs
-                    .into_iter()
-                    .map(|(key, value)| match value {
-                        ScrapeLangArgument::String { str } => {
-                            Ok((key, substitute_variables(&str, &variables)?))
-                        }
-                        ScrapeLangArgument::Identifier { name } => Ok((
-                            key,
-                            variables
-                                .get(&name)
-                                .ok_or(Error::VariableNotFoundError(name.to_string()))
-                                .map(|v| v.iter().cloned().collect::<Vec<_>>().join(""))?,
-                        )),
-                    })
-                    .collect::<Result<HashMap<String, String>, Error>>()?;
-
-                let mut new_results = scraper.results().clone();
                 new_results.append(
                     Box::pin(run::<H>(
-                        &job_name,
-                        args_subst,
-                        kwargs_subst,
+                        &name,
+                        args,
+                        kwargs,
                         script_loader.clone(),
                         effect_sender.clone(),
                     ))
@@ -182,6 +225,10 @@ pub async fn run<H: HttpDriver>(
                 );
 
                 scraper = scraper.with_results(new_results);
+            }
+            StepResult::Get(url) => scraper = scraper.get(&url).await?,
+            StepResult::Store { varname, value } => {
+                variables.insert(varname, value);
             }
         }
     }
