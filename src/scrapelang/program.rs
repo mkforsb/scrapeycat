@@ -14,13 +14,13 @@ use crate::{
         parser::{parse, ScrapeLangArgument, ScrapeLangInstruction},
         preprocessor::strip_comments,
     },
-    scraper::{ReqwestHttpDriver, Scraper},
+    scraper::{HttpDriver, Scraper},
     Error,
 };
 
 pub type ScriptLoaderPointer = Arc<RwLock<dyn Fn(&str) -> Result<String, Error> + Send + Sync>>;
 
-pub async fn run(
+pub async fn run<H: HttpDriver>(
     script_name: &str,
     args: Vec<String>,
     kwargs: HashMap<String, String>,
@@ -51,7 +51,7 @@ pub async fn run(
         variables.insert(key, vector![val]);
     }
 
-    let mut scraper = Scraper::<ReqwestHttpDriver>::new();
+    let mut scraper = Scraper::<H>::new();
 
     for instruction in program {
         match instruction {
@@ -171,7 +171,7 @@ pub async fn run(
 
                 let mut new_results = scraper.results().clone();
                 new_results.append(
-                    Box::pin(run(
+                    Box::pin(run::<H>(
                         &job_name,
                         args_subst,
                         kwargs_subst,

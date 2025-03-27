@@ -14,6 +14,7 @@ use libscrapeycat::{
     daemon::{self, config_file::ConfigFile},
     effect::{self, EffectInvocation, EffectSignature},
     scrapelang::program::run,
+    scraper::ReqwestHttpDriver,
     Error,
 };
 
@@ -93,7 +94,7 @@ async fn main() {
 
             let (posargs, kwargs) = split_posargs_and_kwargs(args);
 
-            match run(
+            match run::<ReqwestHttpDriver>(
                 &script,
                 posargs,
                 kwargs,

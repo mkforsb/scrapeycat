@@ -21,6 +21,7 @@ use crate::{
     daemon::config::Config,
     effect::{EffectInvocation, EffectOptions, EffectSignature},
     scrapelang::program::{run, ScriptLoaderPointer},
+    scraper::ReqwestHttpDriver,
     Error,
 };
 
@@ -248,7 +249,7 @@ pub async fn run_forever(
                 let task_script_loader = script_loader.clone();
 
                 tokio::spawn(async move {
-                    let _ = run(
+                    let _ = run::<ReqwestHttpDriver>(
                         &task_script_name,
                         task_args,
                         task_kwargs,
