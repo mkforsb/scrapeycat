@@ -392,11 +392,11 @@ where
             "Delete",
             |tokens: &'b [ScrapeLangToken<'a>], pos_after: TextPosition| {
                 let pos_after = Self::separator(tokens.get(1), pos_after)?;
-                let (regex, _) = Self::string(tokens.get(2), pos_after)?;
+                let (text, _) = Self::string(tokens.get(2), pos_after)?;
                 Self::statement_terminator(tokens.get(3))?;
                 Ok((
                     ScrapeLangInstruction::Delete {
-                        regex: regex.to_string(),
+                        regex: unescape(text),
                     },
                     3,
                 ))
@@ -450,11 +450,11 @@ where
             "Extract",
             |tokens: &'b [ScrapeLangToken<'a>], pos_after: TextPosition| {
                 let pos_after = Self::separator(tokens.get(1), pos_after)?;
-                let (regex, _) = Self::string(tokens.get(2), pos_after)?;
+                let (text, _) = Self::string(tokens.get(2), pos_after)?;
                 Self::statement_terminator(tokens.get(3))?;
                 Ok((
                     ScrapeLangInstruction::Extract {
-                        regex: regex.to_string(),
+                        regex: unescape(text),
                     },
                     3,
                 ))
@@ -1042,7 +1042,7 @@ mod tests {
     #[test]
     pub fn test_parse_extract() {
         assert!(
-            parse(tokenseq(&["extract", "space", "string \\w{3}?;"]).as_slice()).is_ok_and(
+            parse(tokenseq(&["extract", "space", "string \\\\w{3}?;"]).as_slice()).is_ok_and(
                 |result| {
                     assert_eq!(
                         result[0],
