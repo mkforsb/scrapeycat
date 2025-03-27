@@ -1,0 +1,7 @@
+get "file://tests/assets/scripts/bbc-science.input"
+
+extract "(?s)<title>(.+?)</title>"
+
+drop 2
+
+extract "(?s)CDATA\[(.+?)\]\]"
