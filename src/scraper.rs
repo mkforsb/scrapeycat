@@ -165,11 +165,23 @@ where
         })
     }
 
-    pub fn filter(&self, pattern: &str) -> Result<Scraper<H>, Error> {
+    pub fn retain(&self, pattern: &str) -> Result<Scraper<H>, Error> {
         let regex = Regex::new(pattern)?;
 
         let mut results = self.results.clone();
         results.retain(|str| regex.is_match(str));
+
+        Ok(Scraper {
+            results,
+            ..self.clone()
+        })
+    }
+
+    pub fn discard(&self, pattern: &str) -> Result<Scraper<H>, Error> {
+        let regex = Regex::new(pattern)?;
+
+        let mut results = self.results.clone();
+        results.retain(|str| !regex.is_match(str));
 
         Ok(Scraper {
             results,
@@ -353,18 +365,18 @@ mod tests {
     }
 
     #[test]
-    fn test_filter() {
+    fn test_retain() {
         let s1 = nullscraper();
         let s2 = nullscraper().with_results(results![
             "its raining cats and dogs",
             "dogs will sometimes chase cats",
         ]);
 
-        assert_eq!(s1.filter("test").unwrap().results, no_results());
-        assert_eq!(s2.filter("cats").unwrap().results, s2.results);
-        assert_eq!(s2.filter("dogs").unwrap().results, s2.results);
+        assert_eq!(s1.retain("test").unwrap().results, no_results());
+        assert_eq!(s2.retain("cats").unwrap().results, s2.results);
+        assert_eq!(s2.retain("dogs").unwrap().results, s2.results);
         assert_eq!(
-            s2.filter("rain").unwrap().results,
+            s2.retain("rain").unwrap().results,
             results!["its raining cats and dogs"]
         )
     }
@@ -524,5 +536,15 @@ mod tests {
             .get(0)
             .unwrap()
             .contains("[User-Agent]:[Scrapeycat 1.2.3]"));
+    }
+
+    #[test]
+    fn test_discard() {
+        let scraper = nullscraper().with_results(results!["cat", "dog", "puma", "snake", "sheep"]);
+
+        assert_eq!(
+            scraper.discard("a").unwrap().results(),
+            &results!["dog", "sheep"]
+        );
     }
 }

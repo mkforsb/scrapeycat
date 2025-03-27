@@ -49,6 +49,9 @@ fn step<H: HttpDriver>(
         ScrapeLangInstruction::Delete { regex } => Ok(StepResult::UpdatedScraper(
             scraper.delete(&substitute_variables(regex, variables)?)?,
         )),
+        ScrapeLangInstruction::Discard { regex } => {
+            Ok(StepResult::UpdatedScraper(scraper.discard(regex)?))
+        }
         ScrapeLangInstruction::Drop { count } => {
             Ok(StepResult::UpdatedScraper(scraper.drop(*count)))
         }
@@ -123,6 +126,9 @@ fn step<H: HttpDriver>(
         ScrapeLangInstruction::Prepend { str } => Ok(StepResult::UpdatedScraper(
             scraper.prepend(&substitute_variables(str, variables)?),
         )),
+        ScrapeLangInstruction::Retain { regex } => {
+            Ok(StepResult::UpdatedScraper(scraper.retain(regex)?))
+        }
         ScrapeLangInstruction::Store { varname } => Ok(StepResult::Store {
             varname: varname.to_string(),
             value: scraper.results().clone(),
@@ -411,6 +417,66 @@ mod tests {
                 StepResult::EffectInvocation(inv)
                     if inv.name() == "test" && inv.args() == &vec!["x"]
             )
+        }));
+    }
+
+    #[test]
+    fn test_step_discard() {
+        let scraper = Scraper::<NullHttpDriver>::new().with_results(vector![
+            "1".to_string(),
+            "22".to_string(),
+            "333".to_string(),
+            "4444".to_string(),
+            "55555".to_string(),
+        ]);
+
+        assert!(step(
+            &ScrapeLangInstruction::Discard {
+                regex: "1|....".to_string()
+            },
+            &scraper,
+            &HashMap::new(),
+        )
+        .is_ok_and(|result| {
+            if let StepResult::UpdatedScraper(scraper) = result {
+                assert_eq!(
+                    scraper.results(),
+                    &vector!["22".to_string(), "333".to_string()]
+                );
+                true
+            } else {
+                false
+            }
+        }));
+    }
+
+    #[test]
+    fn test_step_retain() {
+        let scraper = Scraper::<NullHttpDriver>::new().with_results(vector![
+            "1".to_string(),
+            "22".to_string(),
+            "333".to_string(),
+            "4444".to_string(),
+            "55555".to_string(),
+        ]);
+
+        assert!(step(
+            &ScrapeLangInstruction::Retain {
+                regex: "1|....".to_string()
+            },
+            &scraper,
+            &HashMap::new(),
+        )
+        .is_ok_and(|result| {
+            if let StepResult::UpdatedScraper(scraper) = result {
+                assert_eq!(
+                    scraper.results(),
+                    &vector!["1".to_string(), "4444".to_string(), "55555".to_string()]
+                );
+                true
+            } else {
+                false
+            }
         }));
     }
 }

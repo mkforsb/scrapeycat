@@ -40,6 +40,9 @@ pub enum ScrapeLangInstruction {
     Delete {
         regex: String,
     },
+    Discard {
+        regex: String,
+    },
     Drop {
         count: usize,
     },
@@ -64,6 +67,9 @@ pub enum ScrapeLangInstruction {
     },
     Prepend {
         str: String,
+    },
+    Retain {
+        regex: String,
     },
     Run {
         job_name: String,
@@ -404,6 +410,26 @@ where
         )
     }
 
+    pub fn parse_discard(tokens: &'b [ScrapeLangToken<'a>], pos: TextPosition) -> ParseResult {
+        try_parse!(
+            tokens,
+            pos,
+            Discard,
+            "Discard",
+            |tokens: &'b [ScrapeLangToken<'a>], pos_after: TextPosition| {
+                let pos_after = Self::separator(tokens.get(1), pos_after)?;
+                let (text, _) = Self::string(tokens.get(2), pos_after)?;
+                Self::statement_terminator(tokens.get(3))?;
+                Ok((
+                    ScrapeLangInstruction::Discard {
+                        regex: unescape(text),
+                    },
+                    3,
+                ))
+            }
+        )
+    }
+
     pub fn parse_drop(tokens: &'b [ScrapeLangToken<'a>], pos: TextPosition) -> ParseResult {
         try_parse!(
             tokens,
@@ -558,6 +584,26 @@ where
         )
     }
 
+    pub fn parse_retain(tokens: &'b [ScrapeLangToken<'a>], pos: TextPosition) -> ParseResult {
+        try_parse!(
+            tokens,
+            pos,
+            Retain,
+            "Retain",
+            |tokens: &'b [ScrapeLangToken<'a>], pos_after: TextPosition| {
+                let pos_after = Self::separator(tokens.get(1), pos_after)?;
+                let (text, _) = Self::string(tokens.get(2), pos_after)?;
+                Self::statement_terminator(tokens.get(3))?;
+                Ok((
+                    ScrapeLangInstruction::Retain {
+                        regex: unescape(text),
+                    },
+                    3,
+                ))
+            }
+        )
+    }
+
     pub fn parse_run(tokens: &'b [ScrapeLangToken<'a>], pos: TextPosition) -> ParseResult {
         try_parse!(
             tokens,
@@ -642,6 +688,11 @@ where
                 result.push(instr);
                 rest = &rest[num_toks..];
             }
+            Some(ScrapeLangToken::Discard { pos, .. }) => {
+                let (instr, num_toks) = ScrapeLangInstruction::parse_discard(rest, *pos)?;
+                result.push(instr);
+                rest = &rest[num_toks..];
+            }
             Some(ScrapeLangToken::Drop { pos, .. }) => {
                 let (instr, num_toks) = ScrapeLangInstruction::parse_drop(rest, *pos)?;
                 result.push(instr);
@@ -679,6 +730,11 @@ where
             }
             Some(ScrapeLangToken::Prepend { pos, .. }) => {
                 let (instr, num_toks) = ScrapeLangInstruction::parse_prepend(rest, *pos)?;
+                result.push(instr);
+                rest = &rest[num_toks..];
+            }
+            Some(ScrapeLangToken::Retain { pos, .. }) => {
+                let (instr, num_toks) = ScrapeLangInstruction::parse_retain(rest, *pos)?;
                 result.push(instr);
                 rest = &rest[num_toks..];
             }
@@ -752,6 +808,7 @@ mod tests {
                 (Some(&"clear"), _) => simple!(Clear, "clear"),
                 (Some(&"clearheaders"), _) => simple!(ClearHeaders, "clearheaders"),
                 (Some(&"delete"), _) => simple!(Delete, "delete"),
+                (Some(&"discard"), _) => simple!(Discard, "discard"),
                 (Some(&"drop"), _) => simple!(Drop, "drop"),
                 (Some(&"effect"), _) => simple!(Effect, "effect"),
                 (Some(&"extract"), _) => simple!(Extract, "extract"),
@@ -760,6 +817,7 @@ mod tests {
                 (Some(&"header"), _) => simple!(Header, "header"),
                 (Some(&"load"), _) => simple!(Load, "load"),
                 (Some(&"prepend"), _) => simple!(Prepend, "prepend"),
+                (Some(&"retain"), _) => simple!(Retain, "retain"),
                 (Some(&"run"), _) => simple!(Run, "run"),
                 (Some(&"store"), _) => simple!(Store, "store"),
                 (Some(&"space"), _) => simple!(Whitespace, " "),
@@ -843,6 +901,20 @@ mod tests {
                 );
                 true
             })
+        );
+    }
+
+    #[test]
+    pub fn test_parse_discard() {
+        assert!(
+            parse(tokenseq(&["discard", "space", "string unwanted"]).as_slice()).is_ok_and(
+                |result| {
+                    assert!(matches!(
+                        &result[0],
+                        ScrapeLangInstruction::Discard { regex } if regex == "unwanted"));
+                    true
+                }
+            )
         );
     }
 
@@ -1133,6 +1205,18 @@ mod tests {
                     true
                 }
             )
+        );
+    }
+
+    #[test]
+    pub fn test_parse_retain() {
+        assert!(
+            parse(tokenseq(&["retain", "space", "string wanted"]).as_slice()).is_ok_and(|result| {
+                assert!(matches!(
+                    &result[0],
+                    ScrapeLangInstruction::Retain { regex } if regex == "wanted"));
+                true
+            })
         );
     }
 

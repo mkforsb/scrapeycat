@@ -30,6 +30,10 @@ pub enum ScrapeLangToken<'a> {
         pos: TextPosition,
         pos_after: TextPosition,
     },
+    Discard {
+        pos: TextPosition,
+        pos_after: TextPosition,
+    },
     Drop {
         pos: TextPosition,
         pos_after: TextPosition,
@@ -80,6 +84,10 @@ pub enum ScrapeLangToken<'a> {
         pos: TextPosition,
         pos_after: TextPosition,
     },
+    Retain {
+        pos: TextPosition,
+        pos_after: TextPosition,
+    },
     RightParenthesis {
         pos: TextPosition,
         pos_after: TextPosition,
@@ -111,6 +119,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::ClearHeaders { .. } => "ClearHeaders",
             ScrapeLangToken::Comma { .. } => "Comma",
             ScrapeLangToken::Delete { .. } => "Delete",
+            ScrapeLangToken::Discard { .. } => "Discard",
             ScrapeLangToken::Drop { .. } => "Drop",
             ScrapeLangToken::Effect { .. } => "Effect",
             ScrapeLangToken::Equals { .. } => "Equals",
@@ -123,6 +132,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::Load { .. } => "Load",
             ScrapeLangToken::Number { .. } => "Number",
             ScrapeLangToken::Prepend { .. } => "Prepend",
+            ScrapeLangToken::Retain { .. } => "Retain",
             ScrapeLangToken::RightParenthesis { .. } => "RightParenthesis",
             ScrapeLangToken::Run { .. } => "Run",
             ScrapeLangToken::Store { .. } => "Store",
@@ -138,6 +148,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::ClearHeaders { pos, .. } => *pos,
             ScrapeLangToken::Comma { pos, .. } => *pos,
             ScrapeLangToken::Delete { pos, .. } => *pos,
+            ScrapeLangToken::Discard { pos, .. } => *pos,
             ScrapeLangToken::Drop { pos, .. } => *pos,
             ScrapeLangToken::Effect { pos, .. } => *pos,
             ScrapeLangToken::Equals { pos, .. } => *pos,
@@ -150,6 +161,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::Load { pos, .. } => *pos,
             ScrapeLangToken::Number { pos, .. } => *pos,
             ScrapeLangToken::Prepend { pos, .. } => *pos,
+            ScrapeLangToken::Retain { pos, .. } => *pos,
             ScrapeLangToken::RightParenthesis { pos, .. } => *pos,
             ScrapeLangToken::Run { pos, .. } => *pos,
             ScrapeLangToken::Store { pos, .. } => *pos,
@@ -165,6 +177,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::ClearHeaders { pos_after, .. } => *pos_after,
             ScrapeLangToken::Comma { pos_after, .. } => *pos_after,
             ScrapeLangToken::Delete { pos_after, .. } => *pos_after,
+            ScrapeLangToken::Discard { pos_after, .. } => *pos_after,
             ScrapeLangToken::Drop { pos_after, .. } => *pos_after,
             ScrapeLangToken::Effect { pos_after, .. } => *pos_after,
             ScrapeLangToken::Equals { pos_after, .. } => *pos_after,
@@ -177,6 +190,7 @@ impl ScrapeLangToken<'_> {
             ScrapeLangToken::Load { pos_after, .. } => *pos_after,
             ScrapeLangToken::Number { pos_after, .. } => *pos_after,
             ScrapeLangToken::Prepend { pos_after, .. } => *pos_after,
+            ScrapeLangToken::Retain { pos_after, .. } => *pos_after,
             ScrapeLangToken::RightParenthesis { pos_after, .. } => *pos_after,
             ScrapeLangToken::Run { pos_after, .. } => *pos_after,
             ScrapeLangToken::Store { pos_after, .. } => *pos_after,
@@ -220,6 +234,7 @@ pub fn lex(text: &str) -> Result<Vec<ScrapeLangToken>, Error> {
     let keyword_clear = Regex::new("^clear").expect("Should be a valid regex");
     let keyword_clearheaders = Regex::new("^clearheaders").expect("Should be a valid regex");
     let keyword_delete = Regex::new("^delete").expect("Should be a valid regex");
+    let keyword_discard = Regex::new("^discard").expect("Should be a valid regex");
     let keyword_drop = Regex::new("^drop").expect("Should be a valid regex");
     let keyword_effect = Regex::new("^effect").expect("Should be a valid regex");
     let keyword_extract = Regex::new("^extract").expect("Should be a valid regex");
@@ -228,6 +243,7 @@ pub fn lex(text: &str) -> Result<Vec<ScrapeLangToken>, Error> {
     let keyword_header = Regex::new("^header").expect("Should be a valid regex");
     let keyword_load = Regex::new("^load").expect("Should be a valid regex");
     let keyword_prepend = Regex::new("^prepend").expect("Should be a valid regex");
+    let keyword_retain = Regex::new("^retain").expect("Should be a valid regex");
     let keyword_run = Regex::new("^run").expect("Should be a valid regex");
     let keyword_store = Regex::new("^store").expect("Should be a valid regex");
 
@@ -355,6 +371,7 @@ pub fn lex(text: &str) -> Result<Vec<ScrapeLangToken>, Error> {
         simple_matcher!(keyword_clear, Clear),
         simple_matcher!(keyword_clearheaders, ClearHeaders),
         simple_matcher!(keyword_delete, Delete),
+        simple_matcher!(keyword_discard, Discard),
         simple_matcher!(keyword_drop, Drop),
         simple_matcher!(keyword_effect, Effect),
         simple_matcher!(keyword_extract, Extract),
@@ -363,6 +380,7 @@ pub fn lex(text: &str) -> Result<Vec<ScrapeLangToken>, Error> {
         simple_matcher!(keyword_header, Header),
         simple_matcher!(keyword_load, Load),
         simple_matcher!(keyword_prepend, Prepend),
+        simple_matcher!(keyword_retain, Retain),
         simple_matcher!(keyword_run, Run),
         simple_matcher!(keyword_store, Store),
         simple_matcher!(comma, Comma),
@@ -544,6 +562,33 @@ mod tests {
                     pos: TextPosition { row: 1, col: 8 },
                     pos_after: TextPosition { row: 1, col: 15 },
                     str: " foo ",
+                }
+            ));
+            true
+        }))
+    }
+
+    #[test]
+    fn test_lex_discard() {
+        assert_eq!(lex_no_ws_names("discard"), vec!["Discard"]);
+        assert_eq!(lex_no_ws_names("  discard   "), vec!["Discard"]);
+
+        assert_eq!(lex_no_ws_names("discardx"), vec!["Identifier"]);
+        assert_eq!(lex_no_ws_names("discarddiscard"), vec!["Identifier"]);
+    }
+
+    #[test]
+    fn test_lex_discard_pattern() {
+        assert!(lex_no_ws("discard \"donotwant\"").is_ok_and(|result| {
+            assert_eq!(result.len(), 2);
+            assert_eq!(result[0].name(), "Discard");
+            assert_eq!(result[0].pos(), TextPosition { row: 1, col: 1 });
+            assert!(matches!(
+                result[1],
+                ScrapeLangToken::String {
+                    pos: TextPosition { row: 1, col: 9 },
+                    pos_after: TextPosition { row: 1, col: 20 },
+                    str: "donotwant",
                 }
             ));
             true
@@ -859,6 +904,33 @@ mod tests {
                     pos: TextPosition { row: 1, col: 9 },
                     pos_after: TextPosition { row: 1, col: 15 },
                     str: "text",
+                }
+            ));
+            true
+        }))
+    }
+
+    #[test]
+    fn test_lex_retain() {
+        assert_eq!(lex_no_ws_names("retain"), vec!["Retain"]);
+        assert_eq!(lex_no_ws_names("  retain   "), vec!["Retain"]);
+
+        assert_eq!(lex_no_ws_names("retainx"), vec!["Identifier"]);
+        assert_eq!(lex_no_ws_names("retainretain"), vec!["Identifier"]);
+    }
+
+    #[test]
+    fn test_lex_retain_pattern() {
+        assert!(lex_no_ws("retain \"dowant\"").is_ok_and(|result| {
+            assert_eq!(result.len(), 2);
+            assert_eq!(result[0].name(), "Retain");
+            assert_eq!(result[0].pos(), TextPosition { row: 1, col: 1 });
+            assert!(matches!(
+                result[1],
+                ScrapeLangToken::String {
+                    pos: TextPosition { row: 1, col: 8 },
+                    pos_after: TextPosition { row: 1, col: 16 },
+                    str: "dowant",
                 }
             ));
             true

@@ -1,0 +1,3 @@
+get "file://tests/assets/scripts/discard.input"
+extract "[^\\s]+"
+discard "o(g|w)"

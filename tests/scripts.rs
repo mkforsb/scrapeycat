@@ -117,3 +117,13 @@ async fn test_explicit_args_override_results_as_implicit_args_for_effect() {
         true
     }));
 }
+
+#[tokio::test]
+async fn test_discard() {
+    test!("discard");
+}
+
+#[tokio::test]
+async fn test_retain() {
+    test!("retain");
+}
