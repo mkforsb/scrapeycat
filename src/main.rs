@@ -10,7 +10,7 @@ use regex::Regex;
 use stderrlog::Timestamp;
 use tokio::sync::mpsc;
 
-use scrapeycat::{
+use libscrapeycat::{
     daemon::{self, config_file::ConfigFile},
     effect::{self, EffectInvocation, EffectSignature},
     scrapelang::program::run,
