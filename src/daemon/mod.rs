@@ -46,6 +46,8 @@ async fn effects_handler(
     loop {
         match effects_receiver.recv().await {
             Some(invocation) => {
+                debug!("daemon::effects_handler: ({id}) {invocation:?}");
+
                 if options.contains(EffectsHandlerOptions::Deduplicate) {
                     let mut hasher = DefaultHasher::new();
                     invocation.hash(&mut hasher);
@@ -53,6 +55,7 @@ async fn effects_handler(
                     let invocation_hash = hasher.finish();
 
                     if dedup_seen.contains(&invocation_hash) {
+                        debug!("daemon::effects_handler: ({id}) deduplicated");
                         continue;
                     }
 
