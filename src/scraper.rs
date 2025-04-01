@@ -1,6 +1,7 @@
 use std::{cmp::min, marker::PhantomData};
 
 use im::{vector, HashMap, Vector};
+use log::debug;
 use regex::Regex;
 use reqwest::{
     header::{HeaderMap, HeaderName, InvalidHeaderValue},
@@ -56,7 +57,12 @@ impl HttpDriver for ReqwestHttpDriver {
             .default_headers(reqwest_headers)
             .build()?;
 
-        Ok(client.get(url).send().await?.text().await?)
+        debug!("reqwest http driver: request to {url} (headers={headers:?})");
+
+        let result = client.get(url).send().await?.text().await?;
+
+        debug!("reqwest http driver: response from {url}");
+        Ok(result)
     }
 }
 
