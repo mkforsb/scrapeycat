@@ -13,7 +13,7 @@ use std::{
 
 use chrono::{DateTime, Local};
 use flagset::{flags, FlagSet};
-use log::debug;
+use log::{debug, error};
 use suite::{Job, Suite};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
@@ -251,15 +251,27 @@ pub async fn run_forever(
                 let task_effect_sender = effect_tx.clone();
                 let task_script_loader = script_loader.clone();
 
-                tokio::spawn(async move {
-                    let _ = run::<ReqwestHttpDriver>(
+                let handle = tokio::spawn(async move {
+                    run::<ReqwestHttpDriver>(
                         &task_script_name,
                         task_args,
                         task_kwargs,
                         task_script_loader,
                         task_effect_sender,
                     )
-                    .await;
+                    .await
+                });
+
+                let err_script_id = job.script_name().to_string();
+
+                tokio::spawn(async move {
+                    match handle.await {
+                        Ok(result) => match result {
+                            Ok(_) => (),
+                            Err(e) => error!("daemon::run_forever::loop: ({err_script_id}) {e}"),
+                        },
+                        Err(e) => error!("daemon::run_forever::loop: ({err_script_id}) {e}"),
+                    }
                 });
             } else {
                 debug!(
