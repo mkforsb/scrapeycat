@@ -68,7 +68,8 @@ fn split_posargs_and_kwargs(args: Vec<String>) -> (Vec<String>, HashMap<String, 
 async fn main() {
     fn init_logging(debug: bool) {
         stderrlog::new()
-            .module(module_path!())
+            .modules(["scrapeycat", "libscrapeycat"])
+            .show_module_names(false)
             .verbosity(if debug {
                 log::Level::Debug
             } else {
