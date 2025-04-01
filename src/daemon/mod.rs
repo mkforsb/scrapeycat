@@ -210,7 +210,7 @@ pub async fn run_forever(
                     job,
                     tx,
                     tokio::spawn(effects_handler(
-                        format!("{}.{}-{}", suite.name(), job.script_name(), nth),
+                        format!("{}.{}-{}", suite.name(), nth, job.script_name()),
                         rx,
                         effects.clone(),
                         options,
