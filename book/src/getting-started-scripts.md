@@ -108,3 +108,23 @@ Running the script now produces a neat list of titles:
     ...
 ]
 ```
+
+### Doing something useful with the result
+
+While simply producing a list of strings is a valid outcome for many scripts in Scrapeycat,
+sometimes we may want a script to produce more of a noticable [effect](./effects.md). For
+this example, we'll try sending a desktop notification containing the most recent result. To
+achieve this we'll add a `first` command to discard everything except for the first result,
+along with a call to the [notify](./effects-notify.md) effect.
+
+```haskell
+get "https://feeds.bbci.co.uk/news/world/rss.xml"
+extract "(?s)<title>(.+?)</title>"
+drop 2
+extract "(?s)CDATA\[(.+?)\]\]"
+first
+effect notify(title="BBC")
+```
+
+Running this final version of the script should produce a desktop notification displaying the
+`"BBC"` title along with the text of the first headline as its body.
