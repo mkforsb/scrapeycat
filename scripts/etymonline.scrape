@@ -4,5 +4,5 @@ first
 delete "hyphens-auto[^>]+>"
 delete "</?[^>]+>"
 delete "&quot;"
-delete "\n"
+delete "\\n"
 delete "Entries linking to"
