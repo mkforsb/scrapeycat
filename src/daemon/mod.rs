@@ -324,11 +324,14 @@ mod tests {
 
     use super::*;
 
-    fn script_loader(name_or_filename: &str) -> Result<String, Error> {
-        fs::read_to_string(name_or_filename).map_err(|e| {
-            eprintln!("error loading {name_or_filename}: {e}");
-            e.into()
-        })
+    fn panicking_script_loader(filename: &str) -> Result<String, Error> {
+        let result = fs::read_to_string(filename);
+
+        if let Err(e) = result {
+            panic!("error loading {filename}: {e}")
+        } else {
+            Ok(result.unwrap())
+        }
     }
 
     /// A mock clock simulating a world where oversleeping never happens and thus
@@ -423,7 +426,7 @@ mod tests {
 
         let task_handle = tokio::spawn(run_forever(
             vec![suite],
-            Arc::new(RwLock::new(script_loader)),
+            Arc::new(RwLock::new(panicking_script_loader)),
             effects,
             clock,
         ));
@@ -471,7 +474,7 @@ mod tests {
 
         let task_handle = tokio::spawn(run_forever(
             vec![suite],
-            Arc::new(RwLock::new(script_loader)),
+            Arc::new(RwLock::new(panicking_script_loader)),
             effects,
             clock,
         ));
@@ -536,7 +539,7 @@ mod tests {
 
         let task_handle = tokio::spawn(run_forever(
             vec![suite],
-            Arc::new(RwLock::new(script_loader)),
+            Arc::new(RwLock::new(panicking_script_loader)),
             effects,
             clock,
         ));
