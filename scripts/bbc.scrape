@@ -4,4 +4,4 @@ extract "(?s)<title>(.+?)</title>"
 
 drop 2
 
-extract "(?s)CDATA\[(.+?)\]\]"
+extract "(?s)CDATA\\[(.+?)\\]\\]"
