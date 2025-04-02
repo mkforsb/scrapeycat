@@ -4,6 +4,7 @@ use std::{
 };
 
 use im::{vector, Vector};
+use log::error;
 use regex::Regex;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -217,7 +218,10 @@ pub async fn run<H: HttpDriver>(
             StepResult::UpdatedScraper(updated_scraper) => scraper = updated_scraper,
             StepResult::EffectInvocation(effect_invocation) => {
                 if let Err(e) = effect_sender.send(effect_invocation) {
-                    eprintln!("{e}");
+                    error!(
+                        "program::run: error sending effect invocation: {e}, invocation: {:?}",
+                        e.0
+                    );
                 }
             }
             StepResult::ScriptInvocation { name, args, kwargs } => {

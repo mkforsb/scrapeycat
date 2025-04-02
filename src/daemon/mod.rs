@@ -13,7 +13,7 @@ use std::{
 
 use chrono::{DateTime, Local};
 use flagset::{flags, FlagSet};
-use log::{debug, error};
+use log::{debug, error, warn};
 use suite::{Job, Suite};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
@@ -69,10 +69,19 @@ async fn effects_handler(
                             invocation.kwargs(),
                             EffectOptions::default().into(),
                         ) {
-                            eprintln!("{error}");
+                            error!(
+                                "daemon::effects_handler: \
+                                error invoking effect `{}`: {error} (args: {:?}, kwargs: {:?})",
+                                invocation.name(),
+                                invocation.args(),
+                                invocation.kwargs(),
+                            );
                         }
                     }
-                    None => eprintln!("Unknown effect `{}` invoked from {id}", invocation.name()),
+                    None => error!(
+                        "daemon::effects_handler: unknown effect `{}` invoked from {id}",
+                        invocation.name(),
+                    ),
                 }
             }
             None => return,
@@ -132,7 +141,7 @@ pub async fn run_config(config: Config, effects: HashMap<String, EffectSignature
         )
         .await
     } else {
-        eprintln!("Warning: Daemon asked to run config containing no suite(s).")
+        warn!("daemon::run_config: daemon asked to run config containing no suite(s).")
     }
 }
 

@@ -4,6 +4,7 @@ use std::{
 };
 
 use flagset::{flags, FlagSet};
+use log::{debug, error};
 use notify_rust::Notification;
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -120,6 +121,13 @@ pub async fn default_effects_runner_task(
                     _ => None,
                 };
 
+                debug!(
+                    "effect::default_effects_runner_task: invoking `{}` (args: {:?}, kwargs: {:?})",
+                    invocation.name(),
+                    invocation.args(),
+                    invocation.kwargs()
+                );
+
                 match effect_fn {
                     Some(f) => {
                         if let Some(e) = f(
@@ -127,10 +135,19 @@ pub async fn default_effects_runner_task(
                             invocation.kwargs(),
                             EffectOptions::default().into(),
                         ) {
-                            eprintln!("{e}");
+                            error!(
+                                "effect::default_effects_runner_task: \
+                                error invoking effect `{}`: {e} (args: {:?}, kwargs: {:?})",
+                                invocation.name(),
+                                invocation.args(),
+                                invocation.kwargs(),
+                            );
                         }
                     }
-                    None => eprint!("Unknown effect `{}`", invocation.name()),
+                    None => error!(
+                        "effect::default_effects_runner_task: unknown effect `{}`",
+                        invocation.name(),
+                    ),
                 }
             }
             None => return,
