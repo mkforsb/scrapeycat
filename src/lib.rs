@@ -57,4 +57,7 @@ pub enum Error {
 
     #[error("HTTP driver error: {0}")]
     HTTPDriverError(String),
+
+    #[error("Lua error: {0}")]
+    LuaError(String),
 }
