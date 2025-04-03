@@ -26,8 +26,8 @@ currently empty, running it will produce an empty list of results:
 
 We start our script by fetching the RSS feed:
 
-```haskell
-get "https://feeds.bbci.co.uk/news/world/rss.xml"
+```lua
+get("https://feeds.bbci.co.uk/news/world/rss.xml")
 ```
 
 Running the script produces the full XML document as a single result:
@@ -44,9 +44,9 @@ Running the script produces the full XML document as a single result:
 
 Next we add an `extract` command to our script to grab content inside of `<title>` tags:
 
-```haskell
-get "https://feeds.bbci.co.uk/news/world/rss.xml"
-extract "(?s)<title>(.+?)</title>"
+```lua
+get("https://feeds.bbci.co.uk/news/world/rss.xml")
+extract("(?s)<title>(.+?)</title>")
 ```
 
 Running the script now produces a list of many results:
@@ -67,10 +67,10 @@ Running the script now produces a list of many results:
 It seems like the first two results never contain any headlines, so we remove them with a `drop`
 command:
 
-```haskell
-get "https://feeds.bbci.co.uk/news/world/rss.xml"
-extract "(?s)<title>(.+?)</title>"
-drop 2
+```lua
+get("https://feeds.bbci.co.uk/news/world/rss.xml")
+extract("(?s)<title>(.+?)</title>")
+drop(2)
 ```
 
 Running the script confirms we no longer see the two unwanted results:
@@ -91,11 +91,11 @@ to remove the leading and trailing parts of the syntax respectively, but we can 
 another `extract` command with a capture group to achieve the same effect:
 
 
-```haskell
-get "https://feeds.bbci.co.uk/news/world/rss.xml"
-extract "(?s)<title>(.+?)</title>"
-drop 2
-extract "(?s)CDATA\[(.+?)\]\]"
+```lua
+get("https://feeds.bbci.co.uk/news/world/rss.xml")
+extract("(?s)<title>(.+?)</title>")
+drop(2)
+extract("(?s)CDATA\\[(.+?)\\]\\]")
 ```
 
 Running the script now produces a neat list of titles:
@@ -117,13 +117,13 @@ this example, we'll try sending a desktop notification containing the most recen
 achieve this we'll add a `first` command to discard everything except for the first result,
 along with a call to the [notify](./effects-notify.md) effect.
 
-```haskell
-get "https://feeds.bbci.co.uk/news/world/rss.xml"
-extract "(?s)<title>(.+?)</title>"
-drop 2
-extract "(?s)CDATA\[(.+?)\]\]"
-first
-effect notify(title="BBC")
+```lua
+get("https://feeds.bbci.co.uk/news/world/rss.xml")
+extract("(?s)<title>(.+?)</title>")
+drop(2)
+extract("(?s)CDATA\\[(.+?)\\]\\]")
+first()
+effect("notify", {title="BBC"})
 ```
 
 Running this final version of the script should produce a desktop notification displaying the

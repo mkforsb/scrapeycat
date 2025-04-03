@@ -1,7 +1,7 @@
 # The `header` command
 
-```haskell
-header "Name" "Value"
+```lua
+header("Name", "Value")
 ```
 
 The `header` command appends an HTTP header to the list of headers to include when making
@@ -11,10 +11,10 @@ subsequent HTTP requests. The list of headers can be cleared using the
 
 ## Examples
 
-```haskell
-// headers = {}
+```lua
+-- headers = {}
 
-header "User-Agent" "Scrapeycat"
+header("User-Agent", "Scrapeycat")
 
-// headers = {"User-Agent": "Scrapeycat"}
+-- headers = {"User-Agent": "Scrapeycat"}
 ```

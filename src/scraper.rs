@@ -1,4 +1,4 @@
-use std::{cmp::min, marker::PhantomData};
+use std::{cmp::min, future::Future, marker::PhantomData};
 
 use im::{vector, HashMap, Vector};
 use log::debug;
@@ -16,9 +16,12 @@ pub enum HttpHeaders<'a> {
     Headers(&'a HashMap<String, String>),
 }
 
-#[allow(async_fn_in_trait)]
+// #[allow(async_fn_in_trait)]
 pub trait HttpDriver: Clone {
-    async fn get(url: &str, headers: HttpHeaders<'_>) -> Result<String, Error>;
+    fn get(
+        url: &str,
+        headers: HttpHeaders<'_>,
+    ) -> impl Future<Output = Result<String, Error>> + Send;
 
     // TODO: post(url, content)
 

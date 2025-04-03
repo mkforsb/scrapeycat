@@ -3,6 +3,9 @@ name = "scrapeycat"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+testutils = []
+
 [lib]
 name = "libscrapeycat"
 path = "src/lib.rs"
@@ -14,6 +17,7 @@ dirs = "6.0.0"
 flagset = "0.4.6"
 im = "15.1.0"
 log = "0.4.26"
+mlua = { version = "0.10.3", features = ["async", "lua52", "send", "vendored"] }
 notify-rust = "4.11.4"
 regex = "1.11.1"
 reqwest = "0.12.12"

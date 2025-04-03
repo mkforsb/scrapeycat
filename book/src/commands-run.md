@@ -1,15 +1,15 @@
 # The `run` command
 
-```haskell
-run scriptname
-run scriptname(<Args>)
+```lua
+run("scriptname")
+run("scriptname", { <Args> })
 
-where:
-
-  <Args>       ::= <Arg>*                          // zero or more
-  <Arg>        ::= <SimpleArg> | <KeywordArg>
-  <SimpleArg>  ::= "string" | variableName
-  <KeywordArg> ::= keyword=<SimpleArg>
+-- where:
+-- 
+--   <Args>       ::= <Arg>*                          // zero or more
+--   <Arg>        ::= <SimpleArg> | <KeywordArg>
+--   <SimpleArg>  ::= "string" | LuaExpression<Output = String>
+--   <KeywordArg> ::= keyword=<SimpleArg>
 ```
 
 The `run` command executes the given (by name) script, optionally passing one or more arguments,
@@ -25,10 +25,10 @@ following table:
 
 ## Examples
 
-```haskell
-// results = []
+```lua
+-- results = []
 
-run temperature(location="Sweden/Stockholm")
+run("temperature", {location="Sweden/Stockholm"})
 
-// results = ["11 °C"]
+-- results = ["11 °C"]
 ```

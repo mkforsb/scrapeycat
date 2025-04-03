@@ -1,4 +1,4 @@
-get "file://tests/assets/scripts/results-as-implicit-args-for-run.input"
-extract "[a-z]"
-run results-as-implicit-args-for-run-sub
-drop 3
+get("file://tests/assets/scripts/results-as-implicit-args-for-run.input")
+extract("[a-z]")
+run("results-as-implicit-args-for-run-sub")
+drop(3)

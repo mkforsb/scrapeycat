@@ -1,3 +1,5 @@
+#![cfg(all(test, feature = "testutils"))]
+
 use std::{
     collections::HashMap,
     env, fs,
@@ -7,17 +9,9 @@ use std::{
 use libscrapeycat::{
     effect::EffectInvocation,
     scrapelang::program::run,
-    scraper::{HttpDriver, HttpHeaders},
+    testutils::{path_in_project_root, TestHttpDriver},
     Error,
 };
-
-/// `path_in_project_root!("foo")` -> `"/<projectroot>/foo"`, where `<projectroot>` is the path
-/// to the directory that contains the Cargo.toml project manifest.
-macro_rules! path_in_project_root {
-    ($path:expr) => {
-        format!("{}/{}", env::var("CARGO_MANIFEST_DIR").unwrap(), $path)
-    };
-}
 
 /// The script loader for these tests loads `{name}.scrape` from
 /// `/<projectroot>/tests/assets/scripts`
@@ -58,27 +52,6 @@ macro_rules! test {
 
         effect_receiver
     }};
-}
-
-/// The TestHttpDriver supports the following forms of URLs:
-///
-/// * `file://<path>`: returns contents of local filesystem at `<path>`.
-/// * `string://<content>`: returns the string `<content>`.
-#[derive(Debug, Clone)]
-struct TestHttpDriver;
-
-impl HttpDriver for TestHttpDriver {
-    async fn get(url: &str, _headers: HttpHeaders<'_>) -> Result<String, Error> {
-        if url.starts_with("file://") {
-            Ok(fs::read_to_string(path_in_project_root!(url
-                .strip_prefix("file://")
-                .unwrap()))?)
-        } else if url.starts_with("string://") {
-            Ok(url.strip_prefix("string://").unwrap().to_string())
-        } else {
-            Err(Error::HTTPDriverError("invalid url".to_string()))
-        }
-    }
 }
 
 #[tokio::test]

@@ -1,20 +1,20 @@
 # The `print` effect
 
-```haskell
-# print all results joined by spaces, end with newline
-effect print
+```lua
+-- print all results joined by spaces, end with newline
+effect("print")
 
-# print all results joined by spaces, no newline at end
-effect print(end="")
+-- print all results joined by spaces, no newline at end
+effect("print", {end=""})
 
-# print "hello world\n"
-effect print("hello", "world")
+-- print "hello world\n"
+effect("print", {"hello", "world"})
 
-# print "hello world"
-effect print("hello", "world", end="")
+-- print "hello world"
+effect("print", {"hello", "world", end=""})
 
-# print value of variable $x
-effect print($x)
+-- print value of variable $x
+effect("print", { var("$x") })
 ```
 
 ### Arguments

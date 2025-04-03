@@ -1,17 +1,17 @@
 # The `drop` command
 
-```haskell
-drop <number>
+```lua
+drop(N)
 ```
 
 The `drop` command discards the first N results.
 
 ## Examples
 
-```haskell
-// results = ["Alice", "Bob", "Charlie"]
+```lua
+-- results = ["Alice", "Bob", "Charlie"]
 
-drop 2
+drop(2)
 
-// results = ["Charlie"]
+-- results = ["Charlie"]
 ```

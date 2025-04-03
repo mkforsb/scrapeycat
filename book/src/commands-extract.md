@@ -1,7 +1,7 @@
 # The `extract` command
 
-```haskell
-extract "regex pattern"
+```lua
+extract("regex pattern")
 ```
 
 The `extract` command takes a regular expression (provided as a string) and for each current
@@ -14,14 +14,14 @@ capture group. For patterns with one or more explicit capture groups, group 1 is
 
 ## Examples
 
-```haskell
-// results = ["Temperature: 8.2, 8.0, 7.7, 7.2, 7.1, 7.1"]
+```lua
+-- results = ["Temperature: 8.2, 8.0, 7.7, 7.2, 7.1, 7.1"]
 
-extract "\d+.\d+"
+extract("\\d+.\\d+")
 
-// results = ["8.2", "8.0", "7.7", "7.2", "7.1", "7.1"]
+-- results = ["8.2", "8.0", "7.7", "7.2", "7.1", "7.1"]
 
-extract "\d+(.\d+)"
+extract("\\d+(.\\d+)")
 
-// results = [".2", ".0", ".7", ".2", ".1", ".1"]
+-- results = [".2", ".0", ".7", ".2", ".1", ".1"]
 ```

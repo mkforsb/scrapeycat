@@ -1,7 +1,7 @@
 # The `load` command
 
-```haskell
-load variableName
+```lua
+load("variableName")
 ```
 
 The `load` command appends the results stored in the given variable name to the current
@@ -9,21 +9,21 @@ list of results.
 
 ## Examples
 
-```haskell
-// results = ["Alice", "Bob", "Charlie"]
+```lua
+-- results = ["Alice", "Bob", "Charlie"]
 
-store listOfNames
+store("listOfNames")
 
-// results = ["Alice", "Bob", "Charlie"]
-// listOfNames = ["Alice", "Bob", "Charlie"]
+-- results = ["Alice", "Bob", "Charlie"]
+-- listOfNames = ["Alice", "Bob", "Charlie"]
 
-clear
+clear()
 
-// results = []
-// listOfNames = ["Alice", "Bob", "Charlie"]
+-- results = []
+-- listOfNames = ["Alice", "Bob", "Charlie"]
 
-load listOfNames
+load("listOfNames")
 
-// results = ["Alice", "Bob", "Charlie"]
-// listOfNames = ["Alice", "Bob", "Charlie"]
+-- results = ["Alice", "Bob", "Charlie"]
+-- listOfNames = ["Alice", "Bob", "Charlie"]
 ```

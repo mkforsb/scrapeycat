@@ -1,17 +1,17 @@
 # The `clear` command
 
-```haskell
-clear
+```lua
+clear()
 ```
 
 The `clear` command clears the list of results.
 
 ## Examples
 
-```haskell
-// results = ["Alice", "Bob", "Charlie"]
+```lua
+-- results = ["Alice", "Bob", "Charlie"]
 
-clear
+clear()
 
-// results = []
+-- results = []
 ```

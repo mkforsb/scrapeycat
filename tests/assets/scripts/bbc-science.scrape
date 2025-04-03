@@ -1,9 +1,9 @@
-get "file://tests/assets/scripts/bbc-science.input"
+get("file://tests/assets/scripts/bbc-science.input")
 
-extract "(?s)<item>(.+?)</item>"
+extract("(?s)<item>(.+?)</item>")
 
-retain "news/articles"
+retain("news/articles")
 
-extract "(?s)<title>(.+?)</title>"
+extract("(?s)<title>(.+?)</title>")
 
-extract "(?s)CDATA\\[(.+?)\\]\\]"
+extract("(?s)CDATA\\[(.+?)\\]\\]")

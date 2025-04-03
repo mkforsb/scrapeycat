@@ -1,17 +1,17 @@
 # The `first` command
 
-```haskell
-first
+```lua
+first()
 ```
 
 The `first` command discards all results except for the first one.
 
 ## Examples
 
-```haskell
-// results = ["Alice", "Bob", "Charlie"]
+```lua
+-- results = ["Alice", "Bob", "Charlie"]
 
-first
+first()
 
-// results = ["Alice"]
+-- results = ["Alice"]
 ```

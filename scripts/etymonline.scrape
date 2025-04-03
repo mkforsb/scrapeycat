@@ -1,8 +1,8 @@
-get "https://etymonline.com/word/{1}"
-extract "(?s)hyphens-auto.+?Entries linking to"
-first
-delete "hyphens-auto[^>]+>"
-delete "</?[^>]+>"
-delete "&quot;"
-delete "\\n"
-delete "Entries linking to"
+get("https://etymonline.com/word/{1}")
+extract("(?s)hyphens-auto.+?Entries linking to")
+first()
+delete("hyphens-auto[^>]+>")
+delete("</?[^>]+>")
+delete("&quot;")
+delete("\\n")
+delete("Entries linking to")

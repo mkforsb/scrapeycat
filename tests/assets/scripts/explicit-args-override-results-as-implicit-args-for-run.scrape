@@ -1,4 +1,4 @@
-get "file://tests/assets/scripts/explicit-args-override-results-as-implicit-args-for-run.input"
-extract "[a-z]"
-run results-as-implicit-args-for-run-sub("a", "b", "c")
-drop 3
+get("file://tests/assets/scripts/explicit-args-override-results-as-implicit-args-for-run.input")
+extract("[a-z]")
+run("results-as-implicit-args-for-run-sub", {"a", "b", "c"})
+drop(3)

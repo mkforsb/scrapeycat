@@ -1,17 +1,17 @@
 # The `prepend` command
 
-```haskell
-prepend "string"
+```lua
+prepend("string")
 ```
 
 The `prepend` command prepends a given string to the beginning of each result.
 
 ## Examples
 
-```haskell
-// results = ["Alice", "Bob", "Charlie"]
+```lua
+-- results = ["Alice", "Bob", "Charlie"]
 
-prepend "##"
+prepend("##")
 
-// results = ["##Alice", "##Bob", "##Charlie"]
+-- results = ["##Alice", "##Bob", "##Charlie"]
 ```

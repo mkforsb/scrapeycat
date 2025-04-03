@@ -1,17 +1,17 @@
 # The `append` command
 
-```haskell
-append "string"
+```lua
+append("string")
 ```
 
 The `append` command appends a given string to the end of each result.
 
 ## Examples
 
-```haskell
-// results = ["Alice", "Bob", "Charlie"]
+```lua
+-- results = ["Alice", "Bob", "Charlie"]
 
-append " (busy)"
+append(" (busy)")
 
-// results = ["Alice (busy)", "Bob (busy)", "Charlie (busy)"]
+-- results = ["Alice (busy)", "Bob (busy)", "Charlie (busy)"]
 ```

@@ -1,28 +1,28 @@
 # The `store` command
 
-```haskell
-store variableName
+```lua
+store("variableName")
 ```
 
 The `store` command stores the current list of results under a given variable name.
 
 ## Examples
 
-```haskell
-// results = ["Alice", "Bob", "Charlie"]
+```lua
+-- results = ["Alice", "Bob", "Charlie"]
 
-store listOfNames
+store("listOfNames")
 
-// results = ["Alice", "Bob", "Charlie"]
-// listOfNames = ["Alice", "Bob", "Charlie"]
+-- results = ["Alice", "Bob", "Charlie"]
+-- listOfNames = ["Alice", "Bob", "Charlie"]
 
-clear
+clear()
 
-// results = []
-// listOfNames = ["Alice", "Bob", "Charlie"]
+-- results = []
+-- listOfNames = ["Alice", "Bob", "Charlie"]
 
-load listOfNames
+load("listOfNames")
 
-// results = ["Alice", "Bob", "Charlie"]
-// listOfNames = ["Alice", "Bob", "Charlie"]
+-- results = ["Alice", "Bob", "Charlie"]
+-- listOfNames = ["Alice", "Bob", "Charlie"]
 ```

@@ -1,7 +1,7 @@
 # The `get` command
 
-```haskell
-get "https://some/url"
+```lua
+get("https://some/url")
 ```
 
 The `get` command fetches a web page (or other text-based resource) over HTTP, appending the
@@ -9,14 +9,14 @@ text as a new entry in the list of results.
 
 ## Examples
 
-```haskell
-// results = []
+```lua
+-- results = []
 
-get "<some url>"
+get("<some url>")
 
-// results = ["<!doctype html ..."]
+-- results = ["<!doctype html ..."]
 
-get "<another url>"
+get("<another url>")
 
-// results = ["<!doctype html ...", "<html ..."]
+-- results = ["<!doctype html ...", "<html ..."]
 ```

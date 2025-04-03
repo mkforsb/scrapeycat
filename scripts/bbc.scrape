@@ -1,7 +1,7 @@
-get "https://feeds.bbci.co.uk/news/world/rss.xml"
+get("https://feeds.bbci.co.uk/news/world/rss.xml")
 
-extract "(?s)<title>(.+?)</title>"
+extract("(?s)<title>(.+?)</title>")
 
-drop 2
+drop(2)
 
-extract "(?s)CDATA\\[(.+?)\\]\\]"
+extract("(?s)CDATA\\[(.+?)\\]\\]")

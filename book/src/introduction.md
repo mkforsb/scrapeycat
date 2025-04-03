@@ -3,7 +3,7 @@
 **Scrapeycat** is a *web scraping* tool suitable for extracting information from regular
 web pages fetched over HTTP. Scrapeycat consists of the following parts:
 
-* A simple domain-specific scripting language.
+* A simple domain-specific scripting language based on Lua, with full Lua available.
 * A command line application for executing scripts.
 * A daemon application for continuously executing scripts based on a schedule.
 

@@ -5,250 +5,15 @@ use std::{
 
 use im::{vector, Vector};
 use log::error;
+use mlua::prelude::*;
 use regex::Regex;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     effect::EffectInvocation,
-    scrapelang::{
-        lexer::lex,
-        parser::{parse, ScrapeLangArgument, ScrapeLangInstruction},
-        preprocessor::strip_comments,
-    },
     scraper::{HttpDriver, Scraper},
     Error,
 };
-
-enum StepResult<H: HttpDriver> {
-    UpdatedScraper(Scraper<H>),
-    EffectInvocation(EffectInvocation),
-    ScriptInvocation {
-        name: String,
-        args: Vec<String>,
-        kwargs: HashMap<String, String>,
-    },
-    Get(String),
-    Store {
-        varname: String,
-        value: Vector<String>,
-    },
-}
-
-fn step<H: HttpDriver>(
-    instruction: &ScrapeLangInstruction,
-    scraper: &Scraper<H>,
-    variables: &HashMap<String, Vector<String>>,
-) -> Result<StepResult<H>, Error> {
-    match instruction {
-        ScrapeLangInstruction::Append { str } => Ok(StepResult::UpdatedScraper(
-            scraper.append(&substitute_variables(str, variables)?),
-        )),
-        ScrapeLangInstruction::Clear => Ok(StepResult::UpdatedScraper(scraper.clear())),
-        ScrapeLangInstruction::ClearHeaders => {
-            Ok(StepResult::UpdatedScraper(scraper.clear_headers()))
-        }
-        ScrapeLangInstruction::Delete { regex } => Ok(StepResult::UpdatedScraper(
-            scraper.delete(&substitute_variables(regex, variables)?)?,
-        )),
-        ScrapeLangInstruction::Discard { regex } => {
-            Ok(StepResult::UpdatedScraper(scraper.discard(regex)?))
-        }
-        ScrapeLangInstruction::Drop { count } => {
-            Ok(StepResult::UpdatedScraper(scraper.drop(*count)))
-        }
-        ScrapeLangInstruction::Extract { regex } => Ok(StepResult::UpdatedScraper(
-            scraper.extract(&substitute_variables(regex, variables)?)?,
-        )),
-        ScrapeLangInstruction::Effect {
-            effect_name,
-            args,
-            kwargs,
-        } => {
-            let args_subst = if !args.is_empty() {
-                args.iter()
-                    .map(|x| match x {
-                        ScrapeLangArgument::String { str } => substitute_variables(str, variables),
-                        ScrapeLangArgument::Identifier { name } => variables
-                            .get(name)
-                            .ok_or(Error::VariableNotFoundError(name.to_string()))
-                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?
-            } else {
-                scraper.results().iter().cloned().collect::<Vec<_>>()
-            };
-
-            let kwargs_subst: HashMap<String, String> = kwargs
-                .iter()
-                .map(|(key, value)| match value {
-                    ScrapeLangArgument::String { str } => {
-                        Ok((key.clone(), substitute_variables(str, variables)?))
-                    }
-                    ScrapeLangArgument::Identifier { name } => Ok((
-                        key.clone(),
-                        variables
-                            .get(name)
-                            .ok_or(Error::VariableNotFoundError(name.to_string()))
-                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join(""))?,
-                    )),
-                })
-                .collect::<Result<HashMap<String, String>, Error>>()?;
-
-            Ok(StepResult::EffectInvocation(EffectInvocation::new(
-                effect_name,
-                args_subst,
-                kwargs_subst,
-            )))
-        }
-        ScrapeLangInstruction::First => Ok(StepResult::UpdatedScraper(scraper.first())),
-        ScrapeLangInstruction::Get { url } => {
-            Ok(StepResult::Get(substitute_variables(url, variables)?))
-        }
-        ScrapeLangInstruction::Header { key, value } => {
-            Ok(StepResult::UpdatedScraper(scraper.set_header(
-                substitute_variables(key, variables)?,
-                substitute_variables(value, variables)?,
-            )))
-        }
-        ScrapeLangInstruction::Load { varname } => {
-            let mut new_results = scraper.results().clone();
-
-            new_results.append(
-                variables
-                    .get(varname)
-                    .ok_or(Error::VariableNotFoundError(varname.to_string()))?
-                    .clone(),
-            );
-
-            Ok(StepResult::UpdatedScraper(
-                scraper.clone().with_results(new_results),
-            ))
-        }
-        ScrapeLangInstruction::Prepend { str } => Ok(StepResult::UpdatedScraper(
-            scraper.prepend(&substitute_variables(str, variables)?),
-        )),
-        ScrapeLangInstruction::Retain { regex } => {
-            Ok(StepResult::UpdatedScraper(scraper.retain(regex)?))
-        }
-        ScrapeLangInstruction::Store { varname } => Ok(StepResult::Store {
-            varname: varname.to_string(),
-            value: scraper.results().clone(),
-        }),
-        ScrapeLangInstruction::Run {
-            job_name,
-            args,
-            kwargs,
-        } => {
-            let args_subst = if !args.is_empty() {
-                args.iter()
-                    .map(|x| match x {
-                        ScrapeLangArgument::String { str } => substitute_variables(str, variables),
-                        ScrapeLangArgument::Identifier { name } => variables
-                            .get(name)
-                            .ok_or(Error::VariableNotFoundError(name.to_string()))
-                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join("")),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?
-            } else {
-                scraper.results().iter().cloned().collect::<Vec<_>>()
-            };
-
-            let kwargs_subst: HashMap<String, String> = kwargs
-                .iter()
-                .map(|(key, value)| match value {
-                    ScrapeLangArgument::String { str } => {
-                        Ok((key.clone(), substitute_variables(str, variables)?))
-                    }
-                    ScrapeLangArgument::Identifier { name } => Ok((
-                        key.clone(),
-                        variables
-                            .get(name)
-                            .ok_or(Error::VariableNotFoundError(name.to_string()))
-                            .map(|v| v.iter().cloned().collect::<Vec<_>>().join(""))?,
-                    )),
-                })
-                .collect::<Result<HashMap<String, String>, Error>>()?;
-
-            Ok(StepResult::ScriptInvocation {
-                name: job_name.to_string(),
-                args: args_subst,
-                kwargs: kwargs_subst,
-            })
-        }
-    }
-}
-
-pub type ScriptLoaderPointer = Arc<RwLock<dyn Fn(&str) -> Result<String, Error> + Send + Sync>>;
-
-pub async fn run<H: HttpDriver>(
-    script_name: &str,
-    args: Vec<String>,
-    kwargs: HashMap<String, String>,
-    script_loader: ScriptLoaderPointer,
-    effect_sender: UnboundedSender<EffectInvocation>,
-) -> Result<Vector<String>, Error> {
-    let script = {
-        let locked_loader_fn = script_loader
-            .read()
-            .map_err(|_| Error::ScriptLoaderLockingError)?;
-
-        locked_loader_fn(script_name)?
-
-        // Lock dropped here
-    };
-
-    let code = strip_comments(&script);
-    let tokens = lex(&code)?;
-    let program = parse(&tokens)?;
-
-    let mut variables = HashMap::<String, Vector<String>>::new();
-
-    for (index, arg) in args.into_iter().enumerate() {
-        variables.insert(format!("{}", index + 1), vector![arg]);
-    }
-
-    for (key, val) in kwargs {
-        variables.insert(key, vector![val]);
-    }
-
-    let mut scraper = Scraper::<H>::new();
-
-    for instruction in program {
-        match step(&instruction, &scraper, &variables)? {
-            StepResult::UpdatedScraper(updated_scraper) => scraper = updated_scraper,
-            StepResult::EffectInvocation(effect_invocation) => {
-                if let Err(e) = effect_sender.send(effect_invocation) {
-                    error!(
-                        "program::run: error sending effect invocation: {e}, invocation: {:?}",
-                        e.0
-                    );
-                }
-            }
-            StepResult::ScriptInvocation { name, args, kwargs } => {
-                let mut new_results = scraper.results().clone();
-
-                new_results.append(
-                    Box::pin(run::<H>(
-                        &name,
-                        args,
-                        kwargs,
-                        script_loader.clone(),
-                        effect_sender.clone(),
-                    ))
-                    .await?,
-                );
-
-                scraper = scraper.with_results(new_results);
-            }
-            StepResult::Get(url) => scraper = scraper.get(&url).await?,
-            StepResult::Store { varname, value } => {
-                variables.insert(varname, value);
-            }
-        }
-    }
-
-    Ok(scraper.results().clone())
-}
 
 fn substitute_variables(
     text: &str,
@@ -259,9 +24,9 @@ fn substitute_variables(
     let matcher = Regex::new("\\{(.+?)\\}").expect("Should be a valid regex");
 
     for matched in matcher.captures_iter(text) {
-        let group = matched.get(1).unwrap();
+        let group = matched.get(1).expect("Group 1 should exist");
         let varname = group.as_str().to_string();
-        let matched_range = matched.get(0).unwrap().range();
+        let matched_range = matched.get(0).expect("Group 0 should always exist").range();
         let old_len = result.len();
 
         result.replace_range(
@@ -288,11 +53,474 @@ fn substitute_variables(
     Ok(result)
 }
 
+impl From<mlua::Error> for Error {
+    fn from(value: mlua::Error) -> Self {
+        Error::LuaError(value.to_string())
+    }
+}
+
+impl From<Error> for mlua::Error {
+    fn from(value: Error) -> Self {
+        value.into_lua_err()
+    }
+}
+
+struct LuaScraperState<H: HttpDriver + 'static> {
+    scraper: Scraper<H>,
+    variables: HashMap<String, Vector<String>>,
+}
+
+impl<H: HttpDriver + 'static> LuaScraperState<H> {
+    pub fn new() -> Self {
+        LuaScraperState {
+            scraper: Scraper::new(),
+            variables: HashMap::new(),
+        }
+    }
+}
+
+#[inline(always)]
+fn get_state<H: HttpDriver + 'static>(
+    lua: &Lua,
+) -> Result<mlua::AppDataRefMut<'_, LuaScraperState<H>>, Error> {
+    lua.app_data_mut::<LuaScraperState<H>>()
+        .ok_or(Error::LuaError(
+            "Cannot access lua scraper state".to_string(),
+        ))
+}
+
+fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
+    args: Vec<String>,
+    kwargs: HashMap<String, String>,
+    effect_sender: UnboundedSender<EffectInvocation>,
+    script_loader: ScriptLoaderPointer,
+) -> Result<Lua, Error> {
+    let mut state = LuaScraperState::<H>::new();
+
+    for (index, arg) in args.into_iter().enumerate() {
+        state
+            .variables
+            .insert(format!("{}", index + 1), vector![arg]);
+    }
+
+    for (key, val) in kwargs {
+        state.variables.insert(key, vector![val]);
+    }
+
+    let lua = Lua::new();
+
+    lua.load_std_libs(LuaStdLib::ALL_SAFE)?;
+    lua.set_app_data(state);
+
+    lua.globals().set(
+        "append",
+        lua.create_function(|lua: &Lua, text: String| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state
+                .scraper
+                .append(&substitute_variables(&text, &state.variables)?);
+
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "apply",
+        lua.create_function(|lua: &Lua, f: LuaFunction| {
+            // We don't want to hold a borrow to the state while applying the function
+            let results = {
+                let state = get_state::<H>(lua)?;
+                state.scraper.results().iter().cloned().collect::<Vec<_>>()
+            };
+
+            let applied = f.call::<Vec<String>>(results)?;
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state.scraper.clone().with_results(Vector::from(applied));
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "clear",
+        lua.create_function(|lua: &Lua, ()| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state.scraper.clear();
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "clearheaders",
+        lua.create_function(|lua: &Lua, ()| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state.scraper.clear_headers();
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "delete",
+        lua.create_function(|lua: &Lua, pattern: String| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state
+                .scraper
+                .delete(&substitute_variables(&pattern, &state.variables)?)?;
+
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "discard",
+        lua.create_function(|lua: &Lua, pattern: String| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state
+                .scraper
+                .discard(&substitute_variables(&pattern, &state.variables)?)?;
+
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "drop",
+        lua.create_function(|lua: &Lua, n: usize| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state.scraper.drop(n);
+            Ok(())
+        })?,
+    )?;
+
+    let effect_sender_for_effect_fn = UnboundedSender::clone(&effect_sender);
+
+    lua.globals().set(
+        "effect",
+        lua.create_function(
+            move |lua: &Lua, (name, args_table): (String, Option<LuaTable>)| {
+                let state = get_state::<H>(lua)?;
+                let mut args: Vec<String> = vec![];
+                let mut kwargs: HashMap<String, String> = HashMap::new();
+
+                if let Some(args_table) = args_table {
+                    for i in 1..100 {
+                        if let Ok(value) = args_table.get::<String>(i) {
+                            args.push(substitute_variables(&value, &state.variables)?);
+                        }
+                    }
+
+                    for (key, value) in args_table.pairs::<String, String>().flatten() {
+                        if !key.chars().all(|ch| ch.is_ascii_digit()) {
+                            kwargs.insert(key, substitute_variables(&value, &state.variables)?);
+                        }
+                    }
+                }
+
+                if args.is_empty() {
+                    args.extend(state.scraper.results().iter().cloned());
+                }
+
+                match effect_sender_for_effect_fn.send(EffectInvocation::new(name, args, kwargs)) {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(e.into_lua_err()),
+                }
+            },
+        )?,
+    )?;
+
+    lua.globals().set(
+        "extract",
+        lua.create_function(|lua: &Lua, pattern: String| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state
+                .scraper
+                .extract(&substitute_variables(&pattern, &state.variables)?)?;
+
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "first",
+        lua.create_function(|lua: &Lua, ()| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state.scraper.first();
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "get",
+        lua.create_async_function(|lua: Lua, url: String| async move {
+            let (scraper, url_subst) = {
+                let state = get_state::<H>(&lua)?;
+                (
+                    state.scraper.clone(),
+                    &substitute_variables(&url, &state.variables)?,
+                )
+            };
+
+            let updated_scraper = scraper.get(url_subst).await?;
+
+            let mut state = get_state::<H>(&lua)?;
+            state.scraper = updated_scraper;
+
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "header",
+        lua.create_function(|lua: &Lua, (key, value): (String, String)| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state
+                .scraper
+                .set_header(key, substitute_variables(&value, &state.variables)?);
+
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "load",
+        lua.create_function(|lua: &Lua, name: String| {
+            let mut state = get_state::<H>(lua)?;
+            let mut results = state.scraper.results().clone();
+
+            let stored = state.variables.get(&name).ok_or_else(|| {
+                error!("variable `{name}` not found");
+                Error::LuaError(format!("variable `{name}` not found")).into_lua_err()
+            })?;
+
+            results.extend(stored.iter().cloned());
+            state.scraper = state.scraper.clone().with_results(results);
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "map",
+        lua.create_function(|lua: &Lua, f: LuaFunction| {
+            // We don't want to hold a borrow to the state while applying the function
+            let results = {
+                let state = get_state::<H>(lua)?;
+                state.scraper.results().clone()
+            };
+
+            let mapped = Vector::from(
+                results
+                    .into_iter()
+                    .map(|s| f.call::<String>(s))
+                    .collect::<Result<Vec<_>, mlua::Error>>()?,
+            );
+
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state.scraper.clone().with_results(mapped);
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "prepend",
+        lua.create_function(|lua: &Lua, text: String| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state
+                .scraper
+                .prepend(&substitute_variables(&text, &state.variables)?);
+
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "retain",
+        lua.create_function(|lua: &Lua, pattern: String| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state
+                .scraper
+                .retain(&substitute_variables(&pattern, &state.variables)?)?;
+
+            Ok(())
+        })?,
+    )?;
+
+    let effect_sender_for_run_fn = UnboundedSender::clone(&effect_sender);
+    let script_loader_for_run_fn = Arc::clone(&script_loader);
+
+    lua.globals().set(
+        "run",
+        lua.create_async_function(
+            move |lua: Lua, (name, args_table): (String, Option<LuaTable>)| {
+                let effect_sender_inner = UnboundedSender::clone(&effect_sender_for_run_fn);
+                let script_loader_inner = Arc::clone(&script_loader_for_run_fn);
+
+                async move {
+                    let (args, kwargs, mut new_results) = {
+                        let state = get_state::<H>(&lua)?;
+                        let mut args: Vec<String> = vec![];
+                        let mut kwargs: HashMap<String, String> = HashMap::new();
+
+                        if let Some(args_table) = args_table {
+                            for i in 1..100 {
+                                if let Ok(value) = args_table.get::<String>(i) {
+                                    args.push(substitute_variables(&value, &state.variables)?);
+                                }
+                            }
+
+                            for (key, value) in args_table.pairs::<String, String>().flatten() {
+                                if !key.chars().all(|ch| ch.is_ascii_digit()) {
+                                    kwargs.insert(
+                                        key,
+                                        substitute_variables(&value, &state.variables)?,
+                                    );
+                                }
+                            }
+                        }
+
+                        if args.is_empty() {
+                            args.extend(state.scraper.results().iter().cloned());
+                        }
+
+                        (args, kwargs, state.scraper.results().clone())
+                    };
+
+                    let inner_results = Box::pin(run::<H>(
+                        &name,
+                        args,
+                        kwargs,
+                        script_loader_inner,
+                        effect_sender_inner,
+                    ))
+                    .await;
+
+                    match inner_results {
+                        Ok(results) => {
+                            new_results.append(results);
+
+                            let mut state = get_state::<H>(&lua)?;
+                            state.scraper = state.scraper.clone().with_results(new_results);
+
+                            Ok(())
+                        }
+                        Err(e) => Err(e.into_lua_err()),
+                    }
+                }
+            },
+        )?,
+    )?;
+
+    lua.globals().set(
+        "store",
+        lua.create_function(|lua: &Lua, name: String| {
+            let mut state = get_state::<H>(lua)?;
+            let results = state.scraper.results().clone();
+
+            state.variables.insert(name, results);
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
+        "var",
+        lua.create_function(|lua: &Lua, name: String| {
+            Ok(get_state::<H>(lua)?
+                .variables
+                .get(&name)
+                .map(|v| v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" "))
+                .ok_or_else(|| {
+                    // TODO: Any way to short circuit the entirety of run() from here?
+                    //  Maybe something with set_hook, every line, vmstate stop?
+                    error!("variable `{name}` not found");
+                    Error::LuaError(format!("variable `{name}` not found")).into_lua_err()
+                }))
+        })?,
+    )?;
+
+    Ok(lua)
+}
+
+pub type ScriptLoaderPointer = Arc<RwLock<dyn Fn(&str) -> Result<String, Error> + Send + Sync>>;
+
+pub async fn run<H: HttpDriver + Send + Sync + 'static>(
+    script_name: &str,
+    args: Vec<String>,
+    kwargs: HashMap<String, String>,
+    script_loader: ScriptLoaderPointer,
+    effect_sender: UnboundedSender<EffectInvocation>,
+) -> Result<Vector<String>, Error> {
+    let lua_code = {
+        let locked_loader_fn = script_loader
+            .read()
+            .map_err(|_| Error::ScriptLoaderLockingError)?;
+
+        locked_loader_fn(script_name)?
+
+        // Lock dropped here
+    };
+
+    let lua = create_lua_context::<H>(args, kwargs, effect_sender, script_loader)?;
+
+    lua.load(lua_code).exec_async().await?;
+
+    Ok({
+        // Workaround for "temporary dropped while borrowed"
+        let results = get_state::<H>(&lua)?.scraper.results().clone();
+        results
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::scraper::NullHttpDriver;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    use crate::{
+        scraper::NullHttpDriver,
+        testutils::{HeaderTestHttpDriver, TestHttpDriver},
+    };
 
     use super::*;
+
+    macro_rules! results {
+        ($($str:expr),*) => {
+            vector![$($str.to_string()),*]
+        };
+    }
+
+    macro_rules! lua_call {
+        ($lua:ident, $fname:expr, $args:expr => $ret:ty) => {
+            $lua.globals()
+                .get::<LuaFunction>($fname)
+                .unwrap()
+                .call::<$ret>($args)
+                .unwrap()
+        };
+    }
+
+    macro_rules! lua_run_async {
+        ($lua:ident, $script:expr) => {
+            $lua.load($script).exec_async().await.unwrap();
+        };
+    }
+
+    fn null_script_loader_inner(_name: &str) -> Result<String, Error> {
+        Err(Error::JobNotFoundError)
+    }
+
+    fn null_script_loader() -> ScriptLoaderPointer {
+        Arc::new(RwLock::new(null_script_loader_inner))
+    }
 
     #[test]
     fn test_substitute_variables_no_vars() {
@@ -312,10 +540,10 @@ mod tests {
     #[test]
     fn test_substitute_variables_multiple() {
         let variables = HashMap::from([
-            ("x1".to_string(), vector!["1".to_string()]), // result gets shorter
-            ("x2".to_string(), vector!["2345".to_string()]), // result stays same length
-            ("x3".to_string(), vector!["678912".to_string()]), // result gets longer
-            ("$bar".to_string(), vector!["".to_string()]),
+            ("x1".to_string(), results!["1"]),      // Result gets shorter
+            ("x2".to_string(), results!["2345"]),   // Result stays same length
+            ("x3".to_string(), results!["678912"]), // Result gets longer
+            ("$bar".to_string(), results![""]),
         ]);
 
         assert!(
@@ -377,110 +605,1110 @@ mod tests {
     }
 
     #[test]
-    fn test_results_as_implicit_args_for_effect() {
-        let scraper = Scraper::<NullHttpDriver>::new()
-            .with_results(vector!["foo".to_string(), "bar".to_string()]);
+    fn test_create_lua_context_get_and_set_state() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
 
-        assert!(step(
-            &ScrapeLangInstruction::Effect {
-                effect_name: "test".to_string(),
-                args: vec![], // no args present, results should be used
-                kwargs: HashMap::new()
-            },
-            &scraper,
-            &HashMap::new()
+        let lua =
+            create_lua_context::<NullHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        {
+            let mut state = get_state::<NullHttpDriver>(&lua).unwrap();
+
+            state.scraper = state.scraper.clone().with_results(results!["hello"]);
+
+            state
+                .variables
+                .insert("test".to_string(), results!["world"]);
+        }
+
+        let state = get_state::<NullHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello"]);
+        assert_eq!(state.variables.get("test"), Some(&results!["world"]));
+    }
+
+    #[tokio::test]
+    async fn test_lua_append() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                append(" world")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello world"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_append_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://world!!")
+                store("varname")
+                clear()
+                get("string://hello")
+                append(" {varname}")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello world!!"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_apply() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                function process(results)
+                    table.insert(results, "a")
+                    table.insert(results, "b")
+                    return results
+                end
+
+                get("string://hello")
+                apply(process)
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello", "a", "b"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_apply_using_variables_in_applied_fn() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                function process(results)
+                    table.insert(results, var("varname"))
+                    return results
+                end
+
+                get("string://hello")
+                store("varname")
+                clear()
+                get("string://world")
+                apply(process)
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["world", "hello"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_clear() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                clear()
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results![]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_clearheaders() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua = create_lua_context::<HeaderTestHttpDriver>(
+            vec![],
+            HashMap::new(),
+            effect_tx,
+            script_loader,
         )
-        .is_ok_and(|result| {
-            matches!(
-                result,
-                StepResult::EffectInvocation(inv)
-                    if inv.name() == "test" && inv.args() == &vec!["foo", "bar"]
-            )
+        .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                header("User-Agent", "Mozilla/Firefox")
+                clearheaders()
+                get("")
+            "#
+        );
+
+        let state = get_state::<HeaderTestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["Headers({})"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_delete() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                delete("-")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["123456", "84985185844", "7868584"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_delete_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://-")
+                store("varname")
+                clear()
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                delete("{varname}4")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["12356", "84-9851-8584", "786---858"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_discard() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                discard("858")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["123-456"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_discard_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://-")
+                store("varname")
+                clear()
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                discard("{varname}{varname}858")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["123-456", "84-9851-858-44"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_drop() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                drop(2)
+            "#
+        );
+
+        {
+            let state = get_state::<TestHttpDriver>(&lua).unwrap();
+            assert_eq!(state.scraper.results(), &results!["786---858-4"]);
+        }
+
+        lua_call!(lua, "drop", 200 => ());
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+        assert_eq!(state.scraper.results(), &results![]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_effect() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"effect("notify", {"hello", "world", mode="default"})"#
+        );
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(
+                invocation.args(),
+                &vec!["hello".to_string(), "world".to_string()]
+            );
+            assert_eq!(
+                invocation.kwargs().get("mode"),
+                Some(&"default".to_string())
+            );
+            true
         }));
     }
 
-    #[test]
-    fn test_results_as_implicit_args_for_effect_with_explicit_args() {
-        let scraper = Scraper::<NullHttpDriver>::new()
-            .with_results(vector!["foo".to_string(), "bar".to_string()]);
+    #[tokio::test]
+    async fn test_lua_effect_using_variables() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
 
-        assert!(step(
-            &ScrapeLangInstruction::Effect {
-                effect_name: "test".to_string(),
-                args: vec![ScrapeLangArgument::String {
-                    str: "x".to_string() // explicit args present, should override results
-                }],
-                kwargs: HashMap::new()
-            },
-            &scraper,
-            &HashMap::new()
-        )
-        .is_ok_and(|result| {
-            matches!(
-                result,
-                StepResult::EffectInvocation(inv)
-                    if inv.name() == "test" && inv.args() == &vec!["x"]
-            )
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://variabilitious")
+                store("varname")
+                effect("notify", {"hello", "{varname}", "world", mode="{varname}"})
+            "#
+        );
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(
+                invocation.args(),
+                &vec![
+                    "hello".to_string(),
+                    "variabilitious".to_string(),
+                    "world".to_string()
+                ]
+            );
+            assert_eq!(
+                invocation.kwargs().get("mode"),
+                Some(&"variabilitious".to_string())
+            );
+            true
         }));
     }
 
-    #[test]
-    fn test_step_discard() {
-        let scraper = Scraper::<NullHttpDriver>::new().with_results(vector![
-            "1".to_string(),
-            "22".to_string(),
-            "333".to_string(),
-            "4444".to_string(),
-            "55555".to_string(),
-        ]);
+    #[tokio::test]
+    async fn test_lua_extract() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
 
-        assert!(step(
-            &ScrapeLangInstruction::Discard {
-                regex: "1|....".to_string()
-            },
-            &scraper,
-            &HashMap::new(),
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                extract("-(4.?)")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["45", "44", "4"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_extract_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://-(4.?)")
+                store("varname")
+                clear()
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                extract("{varname}")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["45", "44", "4"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_first() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                first()
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["123-456"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_get() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(lua, r#"get("string://hello")"#);
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_get_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foobar")
+                store("myvar")
+                clear()
+                get("string://{myvar}")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["foobar"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_header() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua = create_lua_context::<HeaderTestHttpDriver>(
+            vec![],
+            HashMap::new(),
+            effect_tx,
+            script_loader,
         )
-        .is_ok_and(|result| {
-            if let StepResult::UpdatedScraper(scraper) = result {
-                assert_eq!(
-                    scraper.results(),
-                    &vector!["22".to_string(), "333".to_string()]
-                );
-                true
+        .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                header("User-Agent", "Mozilla/Firefox")
+                get("")
+            "#
+        );
+
+        {
+            let state = get_state::<HeaderTestHttpDriver>(&lua).unwrap();
+
+            assert_eq!(
+                state.scraper.results(),
+                &results!["Headers({\"User-Agent\": \"Mozilla/Firefox\"})"]
+            );
+        }
+
+        lua_run_async!(
+            lua,
+            r#"
+                clear()
+                header("Accept-Encoding", "gzip")
+                get("")
+            "#
+        );
+
+        let state = get_state::<HeaderTestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results![r#"Headers({"Accept-Encoding": "gzip", "User-Agent": "Mozilla/Firefox"})"#]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_header_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua = create_lua_context::<HeaderTestHttpDriver>(
+            vec![],
+            HashMap::new(),
+            effect_tx,
+            script_loader,
+        )
+        .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                header("Test", "123")
+                get("")
+                store("$MyVariable")
+                clear()
+                clearheaders()
+                header("pre{$MyVariable}post", "aff{$MyVariable}suff")
+                get("")
+            "#
+        );
+
+        let state = get_state::<HeaderTestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            // Variable substitution only occurs for the value
+            &results![r#"Headers({"pre{$MyVariable}post": "affHeaders({"Test": "123"})suff"})"#]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_load() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myVariable")
+                clear()
+                load("myVariable")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello"]);
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_lua_load_does_not_do_variable_substitution() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myVariable")
+                clear()
+                load("{myVariable}") -- variable `{myVariable}` not found!
+            "#
+        ); // Panic due to `.unwrap()` in the `lua_run_async` macro
+    }
+
+    #[tokio::test]
+    async fn test_lua_map() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua.load(
+            r#"
+                get("string://mapme")
+                get("string://mapmetoo")
+                map(function(x)
+                    return "(" .. x .. ")!"
+                end)
+            "#,
+        )
+        .exec()
+        .unwrap();
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["(mapme)!", "(mapmetoo)!"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_map_using_variables_in_applied_fn() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foo")
+                store("myvar")
+                clear()
+                get("string://mapme")
+                get("string://mapmetoo")
+                map(function(x)
+                    return var("myvar") .. x .. "!"
+                end)
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["foomapme!", "foomapmetoo!"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_prepend() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://world")
+                prepend("hello ")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello world"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_prepend_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myvar")
+                clear()
+                get("string://world")
+                prepend("{myvar} ")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello world"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_retain() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                retain("858")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["84-9851-858-44", "786---858-4"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_retain_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://5")
+                store("myvar")
+                clear()
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                retain("8{myvar}8")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["84-9851-858-44", "786---858-4"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_run() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "test123" {
+                Ok(r#"get("string://bazinga")"#.to_string())
             } else {
-                false
+                Err(Error::JobNotFoundError)
             }
         }));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(lua, r#"run("test123")"#);
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+        assert_eq!(state.scraper.results(), &results!["bazinga"]);
     }
 
-    #[test]
-    fn test_step_retain() {
-        let scraper = Scraper::<NullHttpDriver>::new().with_results(vector![
-            "1".to_string(),
-            "22".to_string(),
-            "333".to_string(),
-            "4444".to_string(),
-            "55555".to_string(),
-        ]);
+    #[tokio::test]
+    async fn test_lua_run_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
 
-        assert!(step(
-            &ScrapeLangInstruction::Retain {
-                regex: "1|....".to_string()
-            },
-            &scraper,
-            &HashMap::new(),
-        )
-        .is_ok_and(|result| {
-            if let StepResult::UpdatedScraper(scraper) = result {
-                assert_eq!(
-                    scraper.results(),
-                    &vector!["1".to_string(), "4444".to_string(), "55555".to_string()]
-                );
-                true
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "{myvar}" {
+                Ok(r#"get("string://bazinga {1} {2} {limit}")"#.to_string())
             } else {
-                false
+                Err(Error::JobNotFoundError)
             }
+        }));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foobar")
+                store("myvar")
+                clear()
+                run("{myvar}", {"hello", "{myvar}", limit="_{myvar}_"})
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+        assert_eq!(
+            state.scraper.results(),
+            &results!["bazinga hello foobar _foobar_"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_store() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myVariable")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.variables.get("myVariable"), Some(&results!["hello"]));
+    }
+
+    #[tokio::test]
+    async fn test_lua_store_does_not_do_variable_substitution() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("{myVariable}")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.variables.get("{myVariable}"),
+            Some(&results!["hello"])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_var() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myVariable")
+            "#
+        );
+
+        let my_variable = lua_call!(lua, "var", "myVariable" => String);
+
+        assert_eq!(my_variable, "hello");
+    }
+
+    #[tokio::test]
+    async fn test_lua_var_does_not_do_variable_substitution() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("{myVariable}")
+            "#
+        );
+
+        let my_variable = lua_call!(lua, "var", "{myVariable}" => String);
+
+        assert_eq!(my_variable, "hello");
+    }
+
+    #[tokio::test]
+    async fn test_results_as_implicit_args_for_effect() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello world")
+                extract("\\S+")
+                effect("notify", {mode="default"})
+            "#
+        );
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(
+                invocation.args(),
+                &vec!["hello".to_string(), "world".to_string()]
+            );
+            assert_eq!(
+                invocation.kwargs().get("mode"),
+                Some(&"default".to_string())
+            );
+            true
+        }));
+    }
+
+    #[tokio::test]
+    async fn test_results_as_implicit_args_for_effect_with_explicit_args() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello world")
+                extract("\\S+")
+                effect("notify", {"foo", "bar", "baz", mode="default"})
+            "#
+        );
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(
+                invocation.args(),
+                &vec!["foo".to_string(), "bar".to_string(), "baz".to_string()]
+            );
+            assert_eq!(
+                invocation.kwargs().get("mode"),
+                Some(&"default".to_string())
+            );
+            true
+        }));
+    }
+
+    #[tokio::test]
+    async fn test_results_as_implicit_args_for_run() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "test123" {
+                Ok(r#"get("string://{2} {3} {1}")"#.to_string())
+            } else {
+                Err(Error::JobNotFoundError)
+            }
+        }));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foo bar baz")
+                extract("\\S+")
+                run("test123")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+        assert_eq!(
+            state.scraper.results(),
+            &results!["foo", "bar", "baz", "bar baz foo"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_results_as_implicit_args_for_run_with_explicit_args() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "test123" {
+                Ok(r#"get("string://{2} {3} {1}")"#.to_string())
+            } else {
+                Err(Error::JobNotFoundError)
+            }
+        }));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foo bar baz")
+                extract("\\S+")
+                run("test123", {"a", "b", "c"})
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+        assert_eq!(
+            state.scraper.results(),
+            &results!["foo", "bar", "baz", "b c a"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "first" {
+                Ok(r#"
+                        run("second", {"{1}", "{tag}"})
+                        effect("notify", {title="Result"})
+                    "#
+                .to_string())
+            } else if name == "second" {
+                Ok(r#"
+                        get("string://{2} {1}")
+                    "#
+                .to_string())
+            } else {
+                Err(Error::JobNotFoundError)
+            }
+        }));
+
+        let results = run::<TestHttpDriver>(
+            "first",
+            vec!["hello".to_string()],
+            HashMap::from([("tag".to_string(), "1.0".to_string())]),
+            script_loader,
+            effect_tx,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results, results!["1.0 hello"]);
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(invocation.args(), &vec!["1.0 hello".to_string()]);
+            assert_eq!(
+                invocation.kwargs(),
+                &HashMap::from([("title".to_string(), "Result".to_string())])
+            );
+            true
         }));
     }
 }
