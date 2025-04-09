@@ -734,7 +734,29 @@ mod tests {
     }
 
     #[test]
-    fn test_lua_delete_using_variables() {}
+    fn test_lua_delete_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_call!(lua, "get", "string://-" => ());
+        lua_call!(lua, "store", "varname" => ());
+        lua_call!(lua, "clear", () => ());
+        lua_call!(lua, "get", "string://123-456" => ());
+        lua_call!(lua, "get", "string://84-9851-858-44" => ());
+        lua_call!(lua, "get", "string://786---858-4" => ());
+        lua_call!(lua, "delete", "{varname}4" => ());
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["12356", "84-9851-8584", "786---858"]
+        );
+    }
 
     #[test]
     fn test_lua_discard() {
@@ -756,7 +778,29 @@ mod tests {
     }
 
     #[test]
-    fn test_lua_discard_using_variables() {}
+    fn test_lua_discard_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_call!(lua, "get", "string://-" => ());
+        lua_call!(lua, "store", "varname" => ());
+        lua_call!(lua, "clear", () => ());
+        lua_call!(lua, "get", "string://123-456" => ());
+        lua_call!(lua, "get", "string://84-9851-858-44" => ());
+        lua_call!(lua, "get", "string://786---858-4" => ());
+        lua_call!(lua, "discard", "{varname}{varname}858" => ());
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["123-456", "84-9851-858-44"]
+        );
+    }
 
     #[test]
     fn test_lua_drop() {
