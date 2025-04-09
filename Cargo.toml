@@ -3,6 +3,9 @@ name = "scrapeycat"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+testutils = []
+
 [lib]
 name = "libscrapeycat"
 path = "src/lib.rs"

@@ -4,6 +4,9 @@ pub mod scrapelang;
 pub mod scraper;
 pub mod util;
 
+#[cfg(any(test, feature = "testutils"))]
+pub mod testutils;
+
 use std::{io, num::ParseIntError};
 
 use thiserror::Error;
