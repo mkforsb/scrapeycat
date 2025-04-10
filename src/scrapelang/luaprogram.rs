@@ -494,6 +494,12 @@ mod tests {
         };
     }
 
+    macro_rules! lua_run_async {
+        ($lua:ident, $script:expr) => {
+            $lua.load($script).exec_async().await.unwrap();
+        };
+    }
+
     #[test]
     fn test_substitute_variables_no_vars() {
         assert_eq!(substitute_variables("", &HashMap::new()).unwrap(), "");
@@ -601,8 +607,8 @@ mod tests {
         assert_eq!(state.variables.get("test"), Some(&results!["world"]));
     }
 
-    #[test]
-    fn test_lua_append() {
+    #[tokio::test]
+    async fn test_lua_append() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -610,16 +616,21 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://hello" => ());
-        lua_call!(lua, "append", " world" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                append(" world")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results!["hello world"]);
     }
 
-    #[test]
-    fn test_lua_append_using_variables() {
+    #[tokio::test]
+    async fn test_lua_append_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -627,19 +638,24 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://world!!" => ());
-        lua_call!(lua, "store", "world" => ());
-        lua_call!(lua, "clear", () => ());
-        lua_call!(lua, "get", "string://hello" => ());
-        lua_call!(lua, "append", " {world}" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://world!!")
+                store("varname")
+                clear()
+                get("string://hello")
+                append(" {varname}")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results!["hello world!!"]);
     }
 
-    #[test]
-    fn test_lua_apply() {
+    #[tokio::test]
+    async fn test_lua_apply() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -647,33 +663,27 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua.load(
+        lua_run_async!(
+            lua,
             r#"
-            function process(results)
-                table.insert(results, "a")
-                table.insert(results, "b")
-                return results
-            end
-        "#,
-        )
-        .exec()
-        .unwrap();
+                function process(results)
+                    table.insert(results, "a")
+                    table.insert(results, "b")
+                    return results
+                end
 
-        let process = lua.globals().get::<LuaFunction>("process").unwrap();
-
-        lua_call!(lua, "get", "string://hello" => ());
-        lua_call!(lua, "apply", process => ());
+                get("string://hello")
+                apply(process)
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results!["hello", "a", "b"]);
     }
 
-    #[test]
-    fn test_lua_apply_using_variables_in_applied_fn() {}
-
-    #[test]
-    fn test_lua_clear() {
+    #[tokio::test]
+    async fn test_lua_apply_using_variables_in_applied_fn() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -681,16 +691,51 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://hello" => ());
-        lua_call!(lua, "clear", () => ());
+        lua_run_async!(
+            lua,
+            r#"
+                function process(results)
+                    table.insert(results, var("varname"))
+                    return results
+                end
+
+                get("string://hello")
+                store("varname")
+                clear()
+                get("string://world")
+                apply(process)
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["world", "hello"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_clear() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                clear()
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results![]);
     }
 
-    #[test]
-    fn test_lua_clearheaders() {
+    #[tokio::test]
+    async fn test_lua_clearheaders() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -702,17 +747,22 @@ mod tests {
         )
         .unwrap();
 
-        lua_call!(lua, "header", ("User-Agent", "Mozilla/Firefox") => ());
-        lua_call!(lua, "clearheaders", () => ());
-        lua_call!(lua, "get", "" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                header("User-Agent", "Mozilla/Firefox")
+                clearheaders()
+                get("")
+            "#
+        );
 
         let state = get_state::<HeaderTestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results!["Headers({})"]);
     }
 
-    #[test]
-    fn test_lua_delete() {
+    #[tokio::test]
+    async fn test_lua_delete() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -720,10 +770,15 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://123-456" => ());
-        lua_call!(lua, "get", "string://84-9851-858-44" => ());
-        lua_call!(lua, "get", "string://786---858-4" => ());
-        lua_call!(lua, "delete", "-" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                delete("-")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
@@ -733,8 +788,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_lua_delete_using_variables() {
+    #[tokio::test]
+    async fn test_lua_delete_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -742,13 +797,18 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://-" => ());
-        lua_call!(lua, "store", "varname" => ());
-        lua_call!(lua, "clear", () => ());
-        lua_call!(lua, "get", "string://123-456" => ());
-        lua_call!(lua, "get", "string://84-9851-858-44" => ());
-        lua_call!(lua, "get", "string://786---858-4" => ());
-        lua_call!(lua, "delete", "{varname}4" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://-")
+                store("varname")
+                clear()
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                delete("{varname}4")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
@@ -758,8 +818,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_lua_discard() {
+    #[tokio::test]
+    async fn test_lua_discard() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -767,18 +827,23 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://123-456" => ());
-        lua_call!(lua, "get", "string://84-9851-858-44" => ());
-        lua_call!(lua, "get", "string://786---858-4" => ());
-        lua_call!(lua, "discard", "858" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                discard("858")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results!["123-456"]);
     }
 
-    #[test]
-    fn test_lua_discard_using_variables() {
+    #[tokio::test]
+    async fn test_lua_discard_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -786,13 +851,18 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://-" => ());
-        lua_call!(lua, "store", "varname" => ());
-        lua_call!(lua, "clear", () => ());
-        lua_call!(lua, "get", "string://123-456" => ());
-        lua_call!(lua, "get", "string://84-9851-858-44" => ());
-        lua_call!(lua, "get", "string://786---858-4" => ());
-        lua_call!(lua, "discard", "{varname}{varname}858" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://-")
+                store("varname")
+                clear()
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                discard("{varname}{varname}858")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
@@ -802,8 +872,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_lua_drop() {
+    #[tokio::test]
+    async fn test_lua_drop() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -811,10 +881,15 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://123-456" => ());
-        lua_call!(lua, "get", "string://84-9851-858-44" => ());
-        lua_call!(lua, "get", "string://786---858-4" => ());
-        lua_call!(lua, "drop", 2 => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                drop(2)
+            "#
+        );
 
         {
             let state = get_state::<TestHttpDriver>(&lua).unwrap();
@@ -836,9 +911,10 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua.load("effect(\"notify\", {\"hello\", \"world\", mode=\"default\"})")
-            .exec()
-            .unwrap();
+        lua_run_async!(
+            lua,
+            r#"effect("notify", {"hello", "world", mode="default"})"#
+        );
 
         assert!(effect_rx.recv().await.is_some_and(|invocation| {
             assert_eq!(invocation.name(), "notify");
@@ -855,10 +931,43 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_lua_effect_using_variables() {}
+    async fn test_lua_effect_using_variables() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
-    #[test]
-    fn test_lua_extract() {
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://variabilitious")
+                store("varname")
+                effect("notify", {"hello", "{varname}", "world", mode="{varname}"})
+            "#
+        );
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(
+                invocation.args(),
+                &vec![
+                    "hello".to_string(),
+                    "variabilitious".to_string(),
+                    "world".to_string()
+                ]
+            );
+            assert_eq!(
+                invocation.kwargs().get("mode"),
+                Some(&"variabilitious".to_string())
+            );
+            true
+        }));
+    }
+
+    #[tokio::test]
+    async fn test_lua_extract() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -866,21 +975,23 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://123-456" => ());
-        lua_call!(lua, "get", "string://84-9851-858-44" => ());
-        lua_call!(lua, "get", "string://786---858-4" => ());
-        lua_call!(lua, "extract", "-(4.?)" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                extract("-(4.?)")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results!["45", "44", "4"]);
     }
 
-    #[test]
-    fn test_lua_extract_using_variables() {}
-
-    #[test]
-    fn test_lua_first() {
+    #[tokio::test]
+    async fn test_lua_extract_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -888,10 +999,42 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://123-456" => ());
-        lua_call!(lua, "get", "string://84-9851-858-44" => ());
-        lua_call!(lua, "get", "string://786---858-4" => ());
-        lua_call!(lua, "first", () => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://-(4.?)")
+                store("varname")
+                clear()
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                extract("{varname}")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["45", "44", "4"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_first() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                first()
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
@@ -907,10 +1050,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua.load("get(\"string://hello\")")
-            .exec_async()
-            .await
-            .unwrap();
+        lua_run_async!(lua, r#"get("string://hello")"#);
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
@@ -918,10 +1058,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_lua_get_using_variables() {}
+    async fn test_lua_get_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
-    #[test]
-    fn test_lua_header() {
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foobar")
+                store("myvar")
+                clear()
+                get("string://{myvar}")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["foobar"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_header() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -933,8 +1094,13 @@ mod tests {
         )
         .unwrap();
 
-        lua_call!(lua, "header", ("User-Agent", "Mozilla/Firefox") => ());
-        lua_call!(lua, "get", "" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                header("User-Agent", "Mozilla/Firefox")
+                get("")
+            "#
+        );
 
         {
             let state = get_state::<HeaderTestHttpDriver>(&lua).unwrap();
@@ -945,25 +1111,60 @@ mod tests {
             );
         }
 
-        lua_call!(lua, "clear", () => ());
-        lua_call!(lua, "header", ("Accept-Encoding", "gzip") => ());
-        lua_call!(lua, "get", "" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                clear()
+                header("Accept-Encoding", "gzip")
+                get("")
+            "#
+        );
 
         let state = get_state::<HeaderTestHttpDriver>(&lua).unwrap();
 
         assert_eq!(
             state.scraper.results(),
-            &results![
-                "Headers({\"Accept-Encoding\": \"gzip\", \"User-Agent\": \"Mozilla/Firefox\"})"
-            ]
+            &results![r#"Headers({"Accept-Encoding": "gzip", "User-Agent": "Mozilla/Firefox"})"#]
         );
     }
 
-    #[test]
-    fn test_lua_header_using_variables() {}
+    #[tokio::test]
+    async fn test_lua_header_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
-    #[test]
-    fn test_lua_load() {
+        let lua = create_lua_context::<HeaderTestHttpDriver>(
+            vec![],
+            HashMap::new(),
+            effect_tx,
+            script_loader,
+        )
+        .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                header("Test", "123")
+                get("")
+                store("$MyVariable")
+                clear()
+                clearheaders()
+                header("pre{$MyVariable}post", "aff{$MyVariable}suff")
+                get("")
+            "#
+        );
+
+        let state = get_state::<HeaderTestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            // Variable substitution only occurs for the value
+            &results![r#"Headers({"pre{$MyVariable}post": "affHeaders({"Test": "123"})suff"})"#]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_load() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -971,21 +1172,44 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://hello" => ());
-        lua_call!(lua, "store", "myVariable" => ());
-        lua_call!(lua, "clear", () => ());
-        lua_call!(lua, "load", "myVariable" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myVariable")
+                clear()
+                load("myVariable")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results!["hello"]);
     }
 
-    #[test]
-    fn test_lua_load_does_not_do_variable_substitution() {}
+    #[tokio::test]
+    #[should_panic]
+    async fn test_lua_load_does_not_do_variable_substitution() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
-    #[test]
-    fn test_lua_map() {
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myVariable")
+                clear()
+                load("{myVariable}") -- variable `{myVariable}` not found!
+            "#
+        ); // Panic due to `.unwrap()` in the `lua_run_async` macro
+    }
+
+    #[tokio::test]
+    async fn test_lua_map() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -1013,11 +1237,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_lua_map_using_variables_in_applied_fn() {}
-
-    #[test]
-    fn test_lua_prepend() {
+    #[tokio::test]
+    async fn test_lua_map_using_variables_in_applied_fn() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -1025,19 +1246,52 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://world" => ());
-        lua_call!(lua, "prepend", "hello " => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foo")
+                store("myvar")
+                clear()
+                get("string://mapme")
+                get("string://mapmetoo")
+                map(function(x)
+                    return var("myvar") .. x .. "!"
+                end)
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["foomapme!", "foomapmetoo!"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_prepend() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://world")
+                prepend("hello ")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.scraper.results(), &results!["hello world"]);
     }
 
-    #[test]
-    fn test_lua_prepend_using_variables() {}
-
-    #[test]
-    fn test_lua_retain() {
+    #[tokio::test]
+    async fn test_lua_prepend_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -1045,10 +1299,40 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://123-456" => ());
-        lua_call!(lua, "get", "string://84-9851-858-44" => ());
-        lua_call!(lua, "get", "string://786---858-4" => ());
-        lua_call!(lua, "retain", "858" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myvar")
+                clear()
+                get("string://world")
+                prepend("{myvar} ")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["hello world"]);
+    }
+
+    #[tokio::test]
+    async fn test_lua_retain() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                retain("858")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
@@ -1058,8 +1342,35 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_lua_retain_using_variables() {}
+    #[tokio::test]
+    async fn test_lua_retain_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://5")
+                store("myvar")
+                clear()
+                get("string://123-456")
+                get("string://84-9851-858-44")
+                get("string://786---858-4")
+                retain("8{myvar}8")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.scraper.results(),
+            &results!["84-9851-858-44", "786---858-4"]
+        );
+    }
 
     #[tokio::test]
     async fn test_lua_run() {
@@ -1067,7 +1378,7 @@ mod tests {
 
         let script_loader = Arc::new(RwLock::new(|name: &str| {
             if name == "test123" {
-                Ok("get(\"string://bazinga\")".to_string())
+                Ok(r#"get("string://bazinga")"#.to_string())
             } else {
                 Err(Error::JobNotFoundError)
             }
@@ -1077,17 +1388,47 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua.load("run(\"test123\")").exec_async().await.unwrap();
+        lua_run_async!(lua, r#"run("test123")"#);
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
         assert_eq!(state.scraper.results(), &results!["bazinga"]);
     }
 
     #[tokio::test]
-    async fn test_lua_run_using_variables() {}
+    async fn test_lua_run_using_variables() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
 
-    #[test]
-    fn test_lua_store() {
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "{myvar}" {
+                Ok(r#"get("string://bazinga {1} {2} {limit}")"#.to_string())
+            } else {
+                Err(Error::JobNotFoundError)
+            }
+        }));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foobar")
+                store("myvar")
+                clear()
+                run("{myvar}", {"hello", "{myvar}", limit="_{myvar}_"})
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+        assert_eq!(
+            state.scraper.results(),
+            &results!["bazinga hello foobar _foobar_"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_store() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -1095,19 +1436,21 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://hello" => ());
-        lua_call!(lua, "store", "myVariable" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myVariable")
+            "#
+        );
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
         assert_eq!(state.variables.get("myVariable"), Some(&results!["hello"]));
     }
 
-    #[test]
-    fn test_lua_store_does_not_do_variable_substitution() {}
-
-    #[test]
-    fn test_lua_var() {
+    #[tokio::test]
+    async fn test_lua_store_does_not_do_variable_substitution() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
@@ -1115,25 +1458,235 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_call!(lua, "get", "string://hello" => ());
-        lua_call!(lua, "store", "myVariable" => ());
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("{myVariable}")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(
+            state.variables.get("{myVariable}"),
+            Some(&results!["hello"])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lua_var() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("myVariable")
+            "#
+        );
+
         let my_variable = lua_call!(lua, "var", "myVariable" => String);
 
         assert_eq!(my_variable, "hello");
     }
 
-    #[test]
-    fn test_lua_var_does_not_do_variable_substitution() {}
+    #[tokio::test]
+    async fn test_lua_var_does_not_do_variable_substitution() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
 
-    #[test]
-    fn test_results_as_implicit_args_for_effect() {}
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
 
-    #[test]
-    fn test_results_as_implicit_args_for_effect_with_explicit_args() {}
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                store("{myVariable}")
+            "#
+        );
 
-    #[test]
-    fn test_results_as_implicit_args_for_run() {}
+        let my_variable = lua_call!(lua, "var", "{myVariable}" => String);
 
-    #[test]
-    fn test_results_as_implicit_args_for_run_with_explicit_args() {}
+        assert_eq!(my_variable, "hello");
+    }
+
+    #[tokio::test]
+    async fn test_results_as_implicit_args_for_effect() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello world")
+                extract("\\S+")
+                effect("notify", {mode="default"})
+            "#
+        );
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(
+                invocation.args(),
+                &vec!["hello".to_string(), "world".to_string()]
+            );
+            assert_eq!(
+                invocation.kwargs().get("mode"),
+                Some(&"default".to_string())
+            );
+            true
+        }));
+    }
+
+    #[tokio::test]
+    async fn test_results_as_implicit_args_for_effect_with_explicit_args() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello world")
+                extract("\\S+")
+                effect("notify", {"foo", "bar", "baz", mode="default"})
+            "#
+        );
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(
+                invocation.args(),
+                &vec!["foo".to_string(), "bar".to_string(), "baz".to_string()]
+            );
+            assert_eq!(
+                invocation.kwargs().get("mode"),
+                Some(&"default".to_string())
+            );
+            true
+        }));
+    }
+
+    #[tokio::test]
+    async fn test_results_as_implicit_args_for_run() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "test123" {
+                Ok(r#"get("string://{2} {3} {1}")"#.to_string())
+            } else {
+                Err(Error::JobNotFoundError)
+            }
+        }));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foo bar baz")
+                extract("\\S+")
+                run("test123")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+        assert_eq!(
+            state.scraper.results(),
+            &results!["foo", "bar", "baz", "bar baz foo"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_results_as_implicit_args_for_run_with_explicit_args() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "test123" {
+                Ok(r#"get("string://{2} {3} {1}")"#.to_string())
+            } else {
+                Err(Error::JobNotFoundError)
+            }
+        }));
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://foo bar baz")
+                extract("\\S+")
+                run("test123", {"a", "b", "c"})
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+        assert_eq!(
+            state.scraper.results(),
+            &results!["foo", "bar", "baz", "b c a"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+
+        let script_loader = Arc::new(RwLock::new(|name: &str| {
+            if name == "first" {
+                Ok(r#"
+                        run("second", {"{1}", "{tag}"})
+                        effect("notify", {title="Result"})
+                    "#
+                .to_string())
+            } else if name == "second" {
+                Ok(r#"
+                        get("string://{2} {1}")
+                    "#
+                .to_string())
+            } else {
+                Err(Error::JobNotFoundError)
+            }
+        }));
+
+        let results = run::<TestHttpDriver>(
+            "first",
+            vec!["hello".to_string()],
+            HashMap::from([("tag".to_string(), "1.0".to_string())]),
+            script_loader,
+            effect_tx,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results, results!["1.0 hello"]);
+
+        assert!(effect_rx.recv().await.is_some_and(|invocation| {
+            assert_eq!(invocation.name(), "notify");
+            assert_eq!(invocation.args(), &vec!["1.0 hello".to_string()]);
+            assert_eq!(
+                invocation.kwargs(),
+                &HashMap::from([("title".to_string(), "Result".to_string())])
+            );
+            true
+        }));
+    }
 }
