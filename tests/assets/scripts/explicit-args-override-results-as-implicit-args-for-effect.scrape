@@ -1,3 +1,3 @@
-get "file://tests/assets/scripts/results-as-implicit-args-for-effect.input"
-extract "[a-z]"
-effect test("a", "b", "c")
+get("file://tests/assets/scripts/results-as-implicit-args-for-effect.input")
+extract("[a-z]")
+effect("test", {"a", "b", "c"})

@@ -1,4 +1,4 @@
-run word-of-the-day.scrape
-store $word
-clear
-run etymonline.scrape($word)
+run("word-of-the-day.scrape")
+store("$word")
+clear()
+run("etymonline.scrape", {var("$word")})

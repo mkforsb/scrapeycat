@@ -1,5 +1,5 @@
-get "https://wpt-a.smhi.se/backend-weatherpage/forecast/fetcher/2673730/combined"
-extract "\"t\":\"(-?[\\d.]+)"
-first
-prepend "SMHI: "
-append "°C"
+get("https://wpt-a.smhi.se/backend-weatherpage/forecast/fetcher/2673730/combined")
+extract("\"t\":\"(-?[\\d.]+)")
+first()
+prepend("SMHI: ")
+append("°C")
