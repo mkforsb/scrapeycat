@@ -514,6 +514,14 @@ mod tests {
         };
     }
 
+    fn null_script_loader_inner(_name: &str) -> Result<String, Error> {
+        Err(Error::JobNotFoundError)
+    }
+
+    fn null_script_loader() -> ScriptLoaderPointer {
+        Arc::new(RwLock::new(null_script_loader_inner))
+    }
+
     #[test]
     fn test_substitute_variables_no_vars() {
         assert_eq!(substitute_variables("", &HashMap::new()).unwrap(), "");
@@ -599,7 +607,7 @@ mod tests {
     #[test]
     fn test_create_lua_context_get_and_set_state() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<NullHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -624,7 +632,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_append() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -646,7 +654,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_append_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -671,7 +679,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_apply() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -699,7 +707,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_apply_using_variables_in_applied_fn() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -729,7 +737,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_clear() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -751,7 +759,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_clearheaders() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua = create_lua_context::<HeaderTestHttpDriver>(
             vec![],
@@ -778,7 +786,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_delete() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -805,7 +813,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_delete_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -835,7 +843,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_discard() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -859,7 +867,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_discard_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -889,7 +897,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_drop() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -919,7 +927,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_effect() {
         let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -947,7 +955,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_effect_using_variables() {
         let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -983,7 +991,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_extract() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1007,7 +1015,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_extract_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1034,7 +1042,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_first() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1058,7 +1066,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_get() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1074,7 +1082,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_get_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1098,7 +1106,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_header() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua = create_lua_context::<HeaderTestHttpDriver>(
             vec![],
@@ -1145,7 +1153,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_header_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua = create_lua_context::<HeaderTestHttpDriver>(
             vec![],
@@ -1180,7 +1188,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_load() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1205,7 +1213,7 @@ mod tests {
     #[should_panic]
     async fn test_lua_load_does_not_do_variable_substitution() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1225,7 +1233,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_map() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1254,7 +1262,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_map_using_variables_in_applied_fn() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1285,7 +1293,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_prepend() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1307,7 +1315,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_prepend_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1332,7 +1340,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_retain() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1359,7 +1367,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_retain_using_variables() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1444,7 +1452,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_store() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1466,7 +1474,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_store_does_not_do_variable_substitution() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1491,7 +1499,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_var() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1513,7 +1521,7 @@ mod tests {
     #[tokio::test]
     async fn test_lua_var_does_not_do_variable_substitution() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1535,7 +1543,7 @@ mod tests {
     #[tokio::test]
     async fn test_results_as_implicit_args_for_effect() {
         let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
@@ -1567,7 +1575,7 @@ mod tests {
     #[tokio::test]
     async fn test_results_as_implicit_args_for_effect_with_explicit_args() {
         let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
-        let script_loader = Arc::new(RwLock::new(|_: &str| Err(Error::JobNotFoundError)));
+        let script_loader = null_script_loader();
 
         let lua =
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
