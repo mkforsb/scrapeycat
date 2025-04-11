@@ -1,1 +1,1 @@
-effect print("hello world")
+effect("print", {"hello world"})
