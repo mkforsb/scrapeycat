@@ -448,6 +448,9 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
         })?,
     )?;
 
+    // TODO: add a "list" function equivalent to "var" but returns table (skips the joining
+    //  into single string)?
+
     Ok(lua)
 }
 
