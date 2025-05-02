@@ -51,7 +51,7 @@ impl From<EffectInvocation> for Effect {
 
 #[derive(Debug, Clone, Deserialize)]
 struct Test {
-    input: String,
+    input: Option<String>,
     args: Option<Vec<String>>,
     kwargs: Option<HashMap<String, String>>,
     output: Option<Vec<String>>,
@@ -108,7 +108,7 @@ async fn test_book() {
                 .to_string();
 
             SCRIPT.set(Some(code));
-            INPUT.set(Some(test.input));
+            INPUT.set(test.input);
 
             let (effect_sender, mut effect_receiver) = unbounded_channel::<EffectInvocation>();
 

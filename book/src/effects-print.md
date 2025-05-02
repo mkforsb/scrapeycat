@@ -1,7 +1,6 @@
 # The `print` effect
 
 <!-- test {
-    "input": "",
     "kwargs": { "$x": "value-of-x" },
     "effects": [
         {
