@@ -1,17 +1,43 @@
 # The `print` effect
 
+<!-- test {
+    "input": "",
+    "kwargs": { "$x": "value-of-x" },
+    "effects": [
+        {
+            "name": "print"
+        },
+        {
+            "name": "print",
+            "kwargs": { "eol": "" }
+        },
+        {
+            "name": "print",
+            "args": [ "hello", "world" ]
+        },
+        {
+            "name": "print",
+            "args": [ "hello", "world" ],
+            "kwargs": { "eol": "" }
+        },
+        {
+            "name": "print",
+            "args": [ "value-of-x" ]
+        }
+    ]
+} -->
 ```lua
 -- print all results joined by spaces, end with newline
 effect("print")
 
 -- print all results joined by spaces, no newline at end
-effect("print", {end=""})
+effect("print", {eol=""})
 
 -- print "hello world\n"
 effect("print", {"hello", "world"})
 
 -- print "hello world"
-effect("print", {"hello", "world", end=""})
+effect("print", {"hello", "world", eol=""})
 
 -- print value of variable $x
 effect("print", { var("$x") })
@@ -27,4 +53,4 @@ Given no non-keyword arguments, `print` will use the current list of results as 
 ### Keyword arguments
 | Name    | Description                                   |
 | ------- | --------------------------------------------- |
-| **end** | Define the ending character (default: `"\n"`) |
+| **eol** | Define the ending character (default: `"\n"`) |

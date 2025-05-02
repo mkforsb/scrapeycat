@@ -52,6 +52,8 @@ impl From<EffectInvocation> for Effect {
 #[derive(Debug, Clone, Deserialize)]
 struct Test {
     input: String,
+    args: Option<Vec<String>>,
+    kwargs: Option<HashMap<String, String>>,
     output: Option<Vec<String>>,
     effects: Option<Vec<Effect>>,
 }
@@ -79,7 +81,7 @@ impl HttpDriver for BookTestHttpDriver {
 }
 
 #[tokio::test]
-async fn test_foo() {
+async fn test_book() {
     let tests = Regex::new("(?s)<!-- test (\\{.+?\\}) -->").unwrap();
     let code_blocks = Regex::new("(?s)```lua(.+?)```").unwrap();
 
@@ -112,8 +114,8 @@ async fn test_foo() {
 
             let result = run::<BookTestHttpDriver>(
                 "",
-                vec![],
-                HashMap::new(),
+                test.args.unwrap_or(vec![]),
+                test.kwargs.unwrap_or(HashMap::new()),
                 Arc::new(RwLock::new(script_loader)),
                 effect_sender,
             )

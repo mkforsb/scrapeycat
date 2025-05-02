@@ -174,12 +174,12 @@ pub fn print(
 
     maybe_print!("{}", args[args.len() - 1]);
 
-    match kwargs.get("end") {
+    match kwargs.get("eol") {
         Some(str) => maybe_print!("{str}"),
         None => maybe_print!("\n"),
     }
 
-    report_unknown_kwargs("print", &["end"], kwargs)
+    report_unknown_kwargs("print", &["eol"], kwargs)
 }
 
 pub fn notify(
@@ -279,13 +279,13 @@ mod tests {
         .is_none());
         assert!(print(
             &["hello".to_string(), "world".to_string()],
-            &map!["end" => ""],
+            &map!["eol" => ""],
             EffectOptions::SilentTest.into(),
         )
         .is_none());
         assert!(print(
             &["hello".to_string(), "world".to_string()],
-            &map!["eol" => ""],
+            &map!["end" => ""],
             EffectOptions::SilentTest.into(),
         )
         .is_some());
