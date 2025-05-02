@@ -291,6 +291,22 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
     )?;
 
     lua.globals().set(
+        "list",
+        lua.create_function(|lua: &Lua, name: String| {
+            Ok(get_state::<H>(lua)?
+                .variables
+                .get(&name)
+                .map(|v| v.iter().cloned().collect::<Vec<_>>())
+                .ok_or_else(|| {
+                    // TODO: Any way to short circuit the entirety of run() from here?
+                    //  Maybe something with set_hook, every line, vmstate stop?
+                    error!("variable `{name}` not found");
+                    Error::LuaError(format!("variable `{name}` not found")).into_lua_err()
+                }))
+        })?,
+    )?;
+
+    lua.globals().set(
         "load",
         lua.create_function(|lua: &Lua, name: String| {
             let mut state = get_state::<H>(lua)?;
@@ -447,9 +463,6 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
                 }))
         })?,
     )?;
-
-    // TODO: add a "list" function equivalent to "var" but returns table (skips the joining
-    //  into single string)?
 
     Ok(lua)
 }
@@ -1189,6 +1202,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_lua_list() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        lua_run_async!(
+            lua,
+            r#"
+                get("string://hello")
+                get("string://world")
+                store("myVariable")
+            "#
+        );
+
+        let my_variable = lua_call!(lua, "list", "myVariable" => Vec<String>);
+
+        assert_eq!(my_variable, vec!["hello", "world"]);
+    }
+
+    #[tokio::test]
     async fn test_lua_load() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = null_script_loader();
@@ -1512,13 +1548,14 @@ mod tests {
             lua,
             r#"
                 get("string://hello")
+                get("string://world")
                 store("myVariable")
             "#
         );
 
         let my_variable = lua_call!(lua, "var", "myVariable" => String);
 
-        assert_eq!(my_variable, "hello");
+        assert_eq!(my_variable, "hello world");
     }
 
     #[tokio::test]
