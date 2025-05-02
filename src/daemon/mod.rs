@@ -556,15 +556,27 @@ mod tests {
 
         assert_eq!(clock.interval(), Duration::from_secs(60));
 
-        let mut now = clock.now().unwrap().to_rfc3339_opts(SecondsFormat::Secs, false);
-        let mut peek = clock.peek().unwrap().to_rfc3339_opts(SecondsFormat::Secs, false);
+        let mut now = clock
+            .now()
+            .unwrap()
+            .to_rfc3339_opts(SecondsFormat::Secs, false);
+        let mut peek = clock
+            .peek()
+            .unwrap()
+            .to_rfc3339_opts(SecondsFormat::Secs, false);
 
         // On the off chance that the above two calls happened right on a second-boundary
         if now != peek {
             tokio::time::sleep(Duration::from_millis(50)).await;
 
-            now = clock.now().unwrap().to_rfc3339_opts(SecondsFormat::Secs, false);
-            peek = clock.peek().unwrap().to_rfc3339_opts(SecondsFormat::Secs, false);
+            now = clock
+                .now()
+                .unwrap()
+                .to_rfc3339_opts(SecondsFormat::Secs, false);
+            peek = clock
+                .peek()
+                .unwrap()
+                .to_rfc3339_opts(SecondsFormat::Secs, false);
         }
 
         assert_eq!(now, peek);
