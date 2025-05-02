@@ -547,4 +547,32 @@ mod tests {
         let _ = tokio::join!(task_handle);
         assert_eq!(TEST_PRINT_EACH_MINUTE_OVERSLEEP_COUNT.load(SeqCst), 3);
     }
+
+    #[tokio::test]
+    async fn test_local_minute_interval_clock() {
+        use chrono::SecondsFormat;
+
+        let mut clock = LocalMinuteIntervalClock;
+
+        assert_eq!(clock.interval(), Duration::from_secs(60));
+
+        let mut now = clock.now().unwrap().to_rfc3339_opts(SecondsFormat::Secs, false);
+        let mut peek = clock.peek().unwrap().to_rfc3339_opts(SecondsFormat::Secs, false);
+
+        // On the off chance that the above two calls happened right on a second-boundary
+        if now != peek {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            now = clock.now().unwrap().to_rfc3339_opts(SecondsFormat::Secs, false);
+            peek = clock.peek().unwrap().to_rfc3339_opts(SecondsFormat::Secs, false);
+        }
+
+        assert_eq!(now, peek);
+
+        let millis = clock.now().unwrap().timestamp_millis();
+
+        clock.sleep(Duration::from_millis(50)).await;
+
+        assert!(clock.now().unwrap().timestamp_millis() >= millis + 50);
+    }
 }
