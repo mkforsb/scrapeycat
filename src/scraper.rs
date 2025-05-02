@@ -82,7 +82,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, str) in self.results.iter().enumerate() {
-            f.write_fmt(format_args!("{}: {}\n", i, str))?;
+            f.write_fmt(format_args!("{i}: {str}\n"))?;
         }
 
         Ok(())

@@ -467,9 +467,9 @@ mod tests {
             .for_each(|spec| {
                 let syntax = spec.to_syntax();
 
-                assert!(format!("{}   ", syntax).parse::<CronSpec>().is_ok());
-                assert!(format!("  {}   ", syntax).parse::<CronSpec>().is_ok());
-                assert!(format!("    {}", syntax).parse::<CronSpec>().is_ok());
+                assert!(format!("{syntax}   ").parse::<CronSpec>().is_ok());
+                assert!(format!("  {syntax}   ").parse::<CronSpec>().is_ok());
+                assert!(format!("    {syntax}").parse::<CronSpec>().is_ok());
                 assert!(syntax.replace(" ", "  ").parse::<CronSpec>().is_ok());
             });
     }
