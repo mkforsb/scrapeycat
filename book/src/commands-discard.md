@@ -9,6 +9,12 @@ result that contains a match for the pattern.
 
 ## Examples
 
+
+<!-- test {
+    "input": "Alice (busy)\nBob\nCharlie (busy)\n",
+    "preamble": "template: get-and-split-by-newline",
+    "output": ["Bob"]
+} -->
 ```lua
 -- results = ["Alice (busy)", "Bob", "Charlie (busy)"]
 

@@ -52,6 +52,7 @@ impl From<EffectInvocation> for Effect {
 #[derive(Debug, Clone, Deserialize)]
 struct Test {
     input: Option<String>,
+    preamble: Option<String>,
     args: Option<Vec<String>>,
     kwargs: Option<HashMap<String, String>>,
     output: Option<Vec<String>>,
@@ -82,6 +83,9 @@ impl HttpDriver for BookTestHttpDriver {
 
 #[tokio::test]
 async fn test_book() {
+    let preamble_templates =
+        HashMap::from([("get-and-split-by-newline", "get(\"\")\nextract(\".+\")\n")]);
+
     let tests = Regex::new("(?s)<!-- test (\\{.+?\\}) -->").unwrap();
     let code_blocks = Regex::new("(?s)```lua(.+?)```").unwrap();
 
@@ -107,7 +111,22 @@ async fn test_book() {
                 .as_str()
                 .to_string();
 
-            SCRIPT.set(Some(code));
+            SCRIPT.set(Some(format!(
+                "{}\n{code}",
+                if let Some(text) = test.preamble {
+                    if text.starts_with("template:") {
+                        preamble_templates
+                            .get(text.strip_prefix("template:").unwrap().trim())
+                            .expect("an existing template name should be given")
+                            .to_string()
+                    } else {
+                        text
+                    }
+                } else {
+                    "".to_string()
+                }
+            )));
+
             INPUT.set(test.input);
 
             let (effect_sender, mut effect_receiver) = unbounded_channel::<EffectInvocation>();
