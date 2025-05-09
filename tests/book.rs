@@ -10,6 +10,7 @@ use std::{
 
 use regex::Regex;
 use serde::Deserialize;
+use tokio::sync::mpsc::unbounded_channel;
 
 use libscrapeycat::{
     effect::EffectInvocation,
@@ -18,7 +19,6 @@ use libscrapeycat::{
     testutils::path_in_project_root,
     Error,
 };
-use tokio::sync::mpsc::unbounded_channel;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 struct Effect {
