@@ -32,7 +32,7 @@ value:
 } -->
 ```lua
 get("https://somedomain.com/names.txt")   -- get newline-separated list of names
-extract("(.+?)(\\n|$)")                   -- split by newline
+extract(".+")                             -- split by newline
 
 map(function(result)                      -- surround each result with double underlines
     return "__" .. result .. "__"
@@ -52,7 +52,7 @@ the entire list of current results in the form of a Lua array-like table (entrie
 } -->
 ```lua
 get("https://somedomain.com/names.txt")   -- get newline-separated list of names
-extract("(.+?)(\\n|$)")                   -- split by newline
+extract(".+")                             -- split by newline
 
 apply(function(all_results)               -- add a result
     table.insert(all_results, "hello")
@@ -95,7 +95,7 @@ effects:
 } -->
 ```lua
 get("https://somedomain.com/names.txt")   -- get newline-separated list of names
-extract("(.+?)(\\n|$)")                   -- split by newline
+extract(".+")                             -- split by newline
 store("names")                            -- store in variable so we can access using `var`
 
 if var("names"):find("bob") then
@@ -129,7 +129,7 @@ for passing lists (array-like Lua tables) as arguments to sub-scripts and/or eff
 } -->
 ```lua
 get("https://somedomain.com/names.txt")   -- get newline-separated list of names
-extract("(.+?)(\\n|$)")                   -- split by newline
+extract(".+")                             -- split by newline
 store("names")                            -- store in variable so we can access using `list`
 
 friends = {"alice", "bob"}
