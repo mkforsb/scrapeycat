@@ -83,8 +83,10 @@ impl HttpDriver for BookTestHttpDriver {
 
 #[tokio::test]
 async fn test_book() {
-    let preamble_templates =
-        HashMap::from([("get-and-split-by-newline", "get(\"\")\nextract(\".+\")\n")]);
+    let preamble_templates = HashMap::from([
+        ("get", "get(\"\")\n"),
+        ("get-and-split-by-newline", "get(\"\")\nextract(\".+\")\n"),
+    ]);
 
     let tests = Regex::new("(?s)<!-- test (\\{.+?\\}) -->").unwrap();
     let code_blocks = Regex::new("(?s)```lua(.+?)```").unwrap();
