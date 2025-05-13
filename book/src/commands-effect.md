@@ -17,6 +17,23 @@ one or more arguments.
 
 ## Examples
 
+<!-- test {
+    "input": "Hello, World!",
+    "preamble": "template: get",
+    "effects": [
+        {
+            "name": "print",
+            "args": [ "Hello, World!" ]
+        },
+        {
+            "name": "print",
+            "args": [ "Hello, World!" ],
+            "kwargs": {
+                "eol": ""
+            }
+        }
+    ]
+} -->
 ```lua
 -- results = ["Hello, World!"]
 
@@ -24,6 +41,31 @@ effect("print")                          -- writes "Hello, World!\n" to stdout
 effect("print", {eol=""})                -- writes "Hello, World!" to stdout
 ```
 
+<!-- test {
+    "input": "Hello, World!",
+    "kwargs": {
+        "$x": "Auf",
+        "$y": "Wiedersehen"
+    },
+    "preamble": "template: get",
+    "effects": [
+        {
+            "name": "print",
+            "args": [ "Hello, World!" ]
+        },
+        {
+            "name": "print",
+            "args": [ "Hello, World!" ],
+            "kwargs": {
+                "eol": ""
+            }
+        },
+        {
+            "name": "print",
+            "args": [ "Auf", "Wiedersehen" ]
+        }
+    ]
+} -->
 ```lua
 -- Regardless of current list of results.
 

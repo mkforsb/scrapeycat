@@ -9,6 +9,11 @@ result that does NOT contain a match for the pattern.
 
 ## Examples
 
+<!-- test {
+    "input": "Alice (busy)\nBob\nCharlie (busy)\n",
+    "preamble": "template: get-and-split-by-newline",
+    "output": ["Alice (busy)", "Charlie (busy)"]
+} -->
 ```lua
 -- results = ["Alice (busy)", "Bob", "Charlie (busy)"]
 

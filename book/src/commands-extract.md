@@ -14,6 +14,11 @@ capture group. For patterns with one or more explicit capture groups, group 1 is
 
 ## Examples
 
+<!-- test {
+    "input": "Temperature: 8.2, 8.0, 7.7, 7.2, 7.1, 7.1",
+    "preamble": "template: get",
+    "output": [".2", ".0", ".7", ".2", ".1", ".1"]
+} -->
 ```lua
 -- results = ["Temperature: 8.2, 8.0, 7.7, 7.2, 7.1, 7.1"]
 
