@@ -21,13 +21,13 @@ one or more arguments.
 -- results = ["Hello, World!"]
 
 effect("print")                          -- writes "Hello, World!\n" to stdout
-effect("print", {end=""})                -- writes "Hello, World!" to stdout
+effect("print", {eol=""})                -- writes "Hello, World!" to stdout
 ```
 
 ```lua
 -- Regardless of current list of results.
 
 effect("print", {"Hello, World!"})         -- writes "Hello, World!\n" to stdout
-effect("print", {"Hello, World!", end=""}) -- writes "Hello, World!" to stdout
+effect("print", {"Hello, World!", eol=""}) -- writes "Hello, World!" to stdout
 effect("print", {var("$x"), var("$y")})    -- writes variable contents to stdout
 ```
