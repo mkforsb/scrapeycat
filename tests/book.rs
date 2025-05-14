@@ -112,7 +112,7 @@ async fn test_book() {
             let spec = serde_json::from_str::<TestSpec>(matched.get(1).unwrap().as_str()).unwrap();
             let end = matched.get(0).unwrap().end();
 
-            let code = code_blocks
+            let script = code_blocks
                 .captures_at(&text, end)
                 .unwrap()
                 .get(1)
@@ -121,7 +121,7 @@ async fn test_book() {
                 .to_string();
 
             SCRIPT.set(Some(format!(
-                "{}\n{code}",
+                "{}\n{script}",
                 if let Some(text) = spec.preamble {
                     if text.starts_with("template:") {
                         preamble_templates
