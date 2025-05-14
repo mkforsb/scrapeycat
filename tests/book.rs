@@ -55,6 +55,11 @@ struct TestSpec {
     preamble: Option<String>,
     args: Option<Vec<String>>,
     kwargs: Option<HashMap<String, String>>,
+    expect: TestExpectSpec,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct TestExpectSpec {
     output: Option<Vec<String>>,
     effects: Option<Vec<Effect>>,
 }
@@ -96,6 +101,8 @@ async fn test_book() {
         .map(|x| x.unwrap())
         .filter(|x| x.path().is_file() && x.path().extension().unwrap() == "md")
     {
+        eprint!("{:?}: ", source.path());
+
         let text = read_to_string(source.path()).unwrap();
         let mut num_tests = 0;
 
@@ -143,17 +150,17 @@ async fn test_book() {
             .await
             .unwrap();
 
-            if let Some(output) = test.output {
+            if let Some(output) = test.expect.output {
                 assert_eq!(result.into_iter().collect::<Vec<_>>(), output);
             }
 
-            if let Some(effects) = test.effects {
+            if let Some(effects) = test.expect.effects {
                 for effect in effects {
                     assert_eq!(effect, effect_receiver.recv().await.unwrap().into());
                 }
             }
         }
 
-        eprintln!("{source:?}: {num_tests}");
+        eprintln!("{num_tests}");
     }
 }

@@ -2,28 +2,30 @@
 
 <!-- test {
     "kwargs": { "$x": "value-of-x" },
-    "effects": [
-        {
-            "name": "print"
-        },
-        {
-            "name": "print",
-            "kwargs": { "eol": "" }
-        },
-        {
-            "name": "print",
-            "args": [ "hello", "world" ]
-        },
-        {
-            "name": "print",
-            "args": [ "hello", "world" ],
-            "kwargs": { "eol": "" }
-        },
-        {
-            "name": "print",
-            "args": [ "value-of-x" ]
-        }
-    ]
+    "expect": {
+        "effects": [
+            {
+                "name": "print"
+            },
+            {
+                "name": "print",
+                "kwargs": { "eol": "" }
+            },
+            {
+                "name": "print",
+                "args": [ "hello", "world" ]
+            },
+            {
+                "name": "print",
+                "args": [ "hello", "world" ],
+                "kwargs": { "eol": "" }
+            },
+            {
+                "name": "print",
+                "args": [ "value-of-x" ]
+            }
+        ]
+    }
 } -->
 ```lua
 -- print all results joined by spaces, end with newline

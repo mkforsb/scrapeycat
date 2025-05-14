@@ -28,7 +28,9 @@ value:
 
 <!-- test {
     "input": "alice\nbob\ncharlie\n",
-    "output": ["__alice__", "__bob__", "__charlie__"]
+    "expect": {
+        "output": ["__alice__", "__bob__", "__charlie__"]
+    }
 } -->
 ```lua
 get("https://somedomain.com/names.txt")   -- get newline-separated list of names
@@ -48,7 +50,9 @@ the entire list of current results in the form of a Lua array-like table (entrie
 
 <!-- test {
     "input": "alice\nbob\ncharlie\n",
-    "output": ["alice", "bob", "charlie", "hello"]
+    "expect": {
+        "output": ["alice", "bob", "charlie", "hello"]
+    }
 } -->
 ```lua
 get("https://somedomain.com/names.txt")   -- get newline-separated list of names
@@ -78,20 +82,22 @@ effects:
 
 <!-- test {
     "input": "alice\nbob\ncharlie\n",
-    "effects": [
-        {
-            "name": "notify",
-            "args": [ "bob is online!" ]
-        },
-        {
-            "name": "notify",
-            "args": [ "alice", "bob", "charlie" ],
-            "kwargs": {
-                "title": "People Online",
-                "body": "alice bob charlie"
+    "expect": {
+        "effects": [
+            {
+                "name": "notify",
+                "args": [ "bob is online!" ]
+            },
+            {
+                "name": "notify",
+                "args": [ "alice", "bob", "charlie" ],
+                "kwargs": {
+                    "title": "People Online",
+                    "body": "alice bob charlie"
+                }
             }
-        }
-    ]
+        ]
+    }
 } -->
 ```lua
 get("https://somedomain.com/names.txt")   -- get newline-separated list of names
@@ -116,16 +122,18 @@ for passing lists (array-like Lua tables) as arguments to sub-scripts and/or eff
 
 <!-- test {
     "input": "alice\nbob\ncharlie\n",
-    "effects": [
-        {
-            "name": "notify",
-            "args": [ "alice is online!" ]
-        },
-        {
-            "name": "notify",
-            "args": [ "bob is online!" ]
-        }
-    ]
+    "expect": {
+        "effects": [
+            {
+                "name": "notify",
+                "args": [ "alice is online!" ]
+            },
+            {
+                "name": "notify",
+                "args": [ "bob is online!" ]
+            }
+        ]
+    }
 } -->
 ```lua
 get("https://somedomain.com/names.txt")   -- get newline-separated list of names

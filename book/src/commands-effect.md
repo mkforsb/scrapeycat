@@ -20,19 +20,21 @@ one or more arguments.
 <!-- test {
     "input": "Hello, World!",
     "preamble": "template: get",
-    "effects": [
-        {
-            "name": "print",
-            "args": [ "Hello, World!" ]
-        },
-        {
-            "name": "print",
-            "args": [ "Hello, World!" ],
-            "kwargs": {
-                "eol": ""
+    "expect": {
+        "effects": [
+            {
+                "name": "print",
+                "args": [ "Hello, World!" ]
+            },
+            {
+                "name": "print",
+                "args": [ "Hello, World!" ],
+                "kwargs": {
+                    "eol": ""
+                }
             }
-        }
-    ]
+        ]
+    }
 } -->
 ```lua
 -- results = ["Hello, World!"]
@@ -48,23 +50,25 @@ effect("print", {eol=""})                -- writes "Hello, World!" to stdout
         "$y": "Wiedersehen"
     },
     "preamble": "template: get",
-    "effects": [
-        {
-            "name": "print",
-            "args": [ "Hello, World!" ]
-        },
-        {
-            "name": "print",
-            "args": [ "Hello, World!" ],
-            "kwargs": {
-                "eol": ""
+    "expect": {
+        "effects": [
+            {
+                "name": "print",
+                "args": [ "Hello, World!" ]
+            },
+            {
+                "name": "print",
+                "args": [ "Hello, World!" ],
+                "kwargs": {
+                    "eol": ""
+                }
+            },
+            {
+                "name": "print",
+                "args": [ "Auf", "Wiedersehen" ]
             }
-        },
-        {
-            "name": "print",
-            "args": [ "Auf", "Wiedersehen" ]
-        }
-    ]
+        ]
+    }
 } -->
 ```lua
 -- Regardless of current list of results.
