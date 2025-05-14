@@ -109,7 +109,7 @@ async fn test_book() {
         for matched in tests.captures_iter(&text) {
             num_tests += 1;
 
-            let test = serde_json::from_str::<TestSpec>(matched.get(1).unwrap().as_str()).unwrap();
+            let spec = serde_json::from_str::<TestSpec>(matched.get(1).unwrap().as_str()).unwrap();
             let end = matched.get(0).unwrap().end();
 
             let code = code_blocks
@@ -122,7 +122,7 @@ async fn test_book() {
 
             SCRIPT.set(Some(format!(
                 "{}\n{code}",
-                if let Some(text) = test.preamble {
+                if let Some(text) = spec.preamble {
                     if text.starts_with("template:") {
                         preamble_templates
                             .get(text.strip_prefix("template:").unwrap().trim())
@@ -136,25 +136,25 @@ async fn test_book() {
                 }
             )));
 
-            INPUT.set(test.input);
+            INPUT.set(spec.input);
 
             let (effect_sender, mut effect_receiver) = unbounded_channel::<EffectInvocation>();
 
             let result = run::<BookTestHttpDriver>(
                 "",
-                test.args.unwrap_or(vec![]),
-                test.kwargs.unwrap_or(HashMap::new()),
+                spec.args.unwrap_or(vec![]),
+                spec.kwargs.unwrap_or(HashMap::new()),
                 Arc::new(RwLock::new(script_loader)),
                 effect_sender,
             )
             .await
             .unwrap();
 
-            if let Some(output) = test.expect.output {
+            if let Some(output) = spec.expect.output {
                 assert_eq!(result.into_iter().collect::<Vec<_>>(), output);
             }
 
-            if let Some(effects) = test.expect.effects {
+            if let Some(effects) = spec.expect.effects {
                 for effect in effects {
                     assert_eq!(effect, effect_receiver.recv().await.unwrap().into());
                 }
