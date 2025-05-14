@@ -1,7 +1,61 @@
+//! This module implements testing machinery for code examples in the mdbook (/book).
+//!
+//! Notes on the implementation:
+//!
+//! 1. All files in /book/src with extension .md are scanned.
+//!
+//! 2. The scan searches for an HTML comment starting with "<!-- test", followed by a JSON object
+//!    (delimited by curly braces) defining a test spec, followed by the closing of the HTML
+//!    comment with "-->". Once found, the scanner will pick the first following markdown Lua code
+//!    block (or panic if there is none) as the code to be associated with the test spec. The
+//!    intended way to define a test looks something like the following:
+//!
+//!    ````
+//!    <!-- test {
+//!      json spec
+//!    } -->
+//!    ```lua
+//!    code example to be tested
+//!    ```
+//!    ````
+//!
+//! 3. The test spec is given as a JSON object according to the following schema:
+//!    
+//!    ```
+//!    interface Spec {
+//!      input?: string,          // text to return for `get(url)` for any `url`
+//!      preamble?: string,       // script text to prepend to code example script
+//!      postamble?: string,      // script text to append to code example script
+//!      args?: string[],         // positional arguments to pass to script
+//!      kwargs?: {               // keyword arguments / named variables to pass to script
+//!        (key: string,)*          // zero or more
+//!      },
+//!      expect: {                // expectations
+//!        output?: string[],       // expected final output
+//!        effects?: [              // expected sequence of effect invocations
+//!          ({
+//!            name: string,        // name of effect
+//!            args?: string[],     // positional arguments to effect
+//!            kwargs?: {           // keyword arguments to effect
+//!              (key: string,)*      // zero or more
+//!            }
+//!          },)*                   // zero or more
+//!        ],
+//!        headers?: string[],      // expected sequence of stringified request headers
+//!      }
+//!    }
+//!    ```
+//!
+//! 4. Stringified request headers are collected for each request, and the stringification will
+//!    transform each key-value header map into a sorted list formatted as a single string of the
+//!    form "Header1: Value, Header2: Value ...", i.e joined by the string ", ".
+//!
+//!    For example, if the request headers were {"User-Agent": "Firefox", "Accept-Encoding": "*"},
+//!    the stringified headers will be "Accept-Encoding: *, User-Agent: Firefox".
 #![cfg(all(test, feature = "testutils"))]
 
 use std::{
-    cell::Cell,
+    cell::RefCell,
     collections::HashMap,
     env,
     fs::{read_dir, read_to_string},
@@ -53,6 +107,7 @@ impl From<EffectInvocation> for Effect {
 struct TestSpec {
     input: Option<String>,
     preamble: Option<String>,
+    postamble: Option<String>,
     args: Option<Vec<String>>,
     kwargs: Option<HashMap<String, String>>,
     expect: TestExpectSpec,
@@ -62,33 +117,80 @@ struct TestSpec {
 struct TestExpectSpec {
     output: Option<Vec<String>>,
     effects: Option<Vec<Effect>>,
+    headers: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone)]
+struct StringifiedHeaders(String);
+
+impl StringifiedHeaders {
+    pub fn new(headers: &HttpHeaders<'_>) -> Self {
+        match headers {
+            HttpHeaders::NoHeaders => StringifiedHeaders("".to_string()),
+            HttpHeaders::Headers(hash_map) => {
+                let mut headers = hash_map
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {v}"))
+                    .collect::<Vec<_>>();
+                headers.sort();
+                StringifiedHeaders(headers.join(", "))
+            }
+        }
+    }
+}
+
+impl PartialEq<String> for StringifiedHeaders {
+    fn eq(&self, other: &String) -> bool {
+        &self.0 == other
+    }
+}
+
+#[derive(Debug)]
+struct TestState {
+    script: String,
+    input: String,
+    headers_seen: Vec<StringifiedHeaders>,
+}
+
+impl TestState {
+    pub fn new(script: String, input: String, headers_seen: Vec<StringifiedHeaders>) -> Self {
+        TestState {
+            script,
+            input,
+            headers_seen,
+        }
+    }
 }
 
 thread_local! {
-    static SCRIPT: Cell<Option<String>> = Cell::new(None);
-    static INPUT: Cell<Option<String>> = Cell::new(None);
+    static TEST_STATE: RefCell<Option<TestState>> = RefCell::new(None);
 }
 
 fn script_loader(_name: &str) -> Result<String, Error> {
-    SCRIPT
-        .take()
-        .ok_or(Error::ScriptNotFoundError("No script".to_string()))
+    Ok(TEST_STATE.with(|state| state.borrow().as_ref().unwrap().script.clone()))
 }
 
 #[derive(Clone)]
 struct BookTestHttpDriver;
 
 impl HttpDriver for BookTestHttpDriver {
-    async fn get(_url: &str, _headers: HttpHeaders<'_>) -> Result<String, Error> {
-        INPUT
-            .take()
-            .ok_or(Error::HTTPDriverError("No input".to_string()))
+    async fn get(_url: &str, headers: HttpHeaders<'_>) -> Result<String, Error> {
+        TEST_STATE.with(|state| {
+            state
+                .borrow_mut()
+                .as_mut()
+                .unwrap()
+                .headers_seen
+                .push(StringifiedHeaders::new(&headers))
+        });
+
+        Ok(TEST_STATE.with(|state| state.borrow().as_ref().unwrap().input.clone()))
     }
 }
 
 #[tokio::test]
 async fn test_book() {
-    let preamble_templates = HashMap::from([
+    let xamble_templates = HashMap::from([
         ("get", "get(\"\")\n"),
         ("get-and-split-by-newline", "get(\"\")\nextract(\".+\")\n"),
     ]);
@@ -101,7 +203,7 @@ async fn test_book() {
         .map(|x| x.unwrap())
         .filter(|x| x.path().is_file() && x.path().extension().unwrap() == "md")
     {
-        eprint!("{:?}: ", source.path());
+        eprint!("{:?} ", source.path());
 
         let text = read_to_string(source.path()).unwrap();
         let mut num_tests = 0;
@@ -112,7 +214,7 @@ async fn test_book() {
             let spec = serde_json::from_str::<TestSpec>(matched.get(1).unwrap().as_str()).unwrap();
             let end = matched.get(0).unwrap().end();
 
-            let script = code_blocks
+            let mut script = code_blocks
                 .captures_at(&text, end)
                 .unwrap()
                 .get(1)
@@ -120,23 +222,39 @@ async fn test_book() {
                 .as_str()
                 .to_string();
 
-            SCRIPT.set(Some(format!(
-                "{}\n{script}",
-                if let Some(text) = spec.preamble {
+            if let Some(text) = spec.preamble {
+                script = format!(
+                    "{}\n{script}\n",
                     if text.starts_with("template:") {
-                        preamble_templates
+                        xamble_templates
                             .get(text.strip_prefix("template:").unwrap().trim())
-                            .expect("an existing template name should be given")
+                            .expect("An existing template name should be given")
                             .to_string()
                     } else {
                         text
                     }
-                } else {
-                    "".to_string()
-                }
-            )));
+                )
+            }
 
-            INPUT.set(spec.input);
+            if let Some(text) = spec.postamble {
+                script = format!(
+                    "{script}\n{}\n",
+                    if text.starts_with("template:") {
+                        xamble_templates
+                            .get(text.strip_prefix("template:").unwrap().trim())
+                            .expect("An existing template name should be given")
+                            .to_string()
+                    } else {
+                        text
+                    }
+                )
+            }
+
+            TEST_STATE.replace(Some(TestState::new(
+                script,
+                spec.input.unwrap_or("".to_string()),
+                vec![],
+            )));
 
             let (effect_sender, mut effect_receiver) = unbounded_channel::<EffectInvocation>();
 
@@ -158,6 +276,13 @@ async fn test_book() {
                 for effect in effects {
                     assert_eq!(effect, effect_receiver.recv().await.unwrap().into());
                 }
+            }
+
+            if let Some(headers) = spec.expect.headers {
+                assert_eq!(
+                    TEST_STATE.with(|state| state.borrow().as_ref().unwrap().headers_seen.clone()),
+                    headers,
+                );
             }
         }
 

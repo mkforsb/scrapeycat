@@ -11,6 +11,13 @@ subsequent HTTP requests. The list of headers can be cleared using the
 
 ## Examples
 
+<!-- test {
+    "input": "",
+    "postamble": "template: get",
+    "expect": {
+        "headers": [ "User-Agent: Scrapeycat" ]
+    }
+} -->
 ```lua
 -- headers = {}
 
