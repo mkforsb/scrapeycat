@@ -50,7 +50,7 @@ impl From<EffectInvocation> for Effect {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct Test {
+struct TestSpec {
     input: Option<String>,
     preamble: Option<String>,
     args: Option<Vec<String>>,
@@ -102,7 +102,7 @@ async fn test_book() {
         for matched in tests.captures_iter(&text) {
             num_tests += 1;
 
-            let test = serde_json::from_str::<Test>(matched.get(1).unwrap().as_str()).unwrap();
+            let test = serde_json::from_str::<TestSpec>(matched.get(1).unwrap().as_str()).unwrap();
             let end = matched.get(0).unwrap().end();
 
             let code = code_blocks
