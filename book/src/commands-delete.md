@@ -10,6 +10,13 @@ result for matching regions, and replaces each matching region with the empty st
 
 ## Examples
 
+<!-- test {
+    "input": "Alice\nBob\nCharlie\n",
+    "preamble": "template: get-and-split-by-newline",
+    "expect": {
+        "output": ["Ae", "Bob", "Char"]
+    }
+} -->
 ```lua
 -- results = ["Alice", "Bob", "Charlie"]
 
