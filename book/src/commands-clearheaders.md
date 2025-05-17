@@ -1,10 +1,10 @@
-# The `clearheaders` command
+# The `clearHeaders` command
 
 ```lua
-clearheaders()
+clearHeaders()
 ```
 
-The `clearheaders` command clears all headers previously set using the
+The `clearHeaders` command clears all headers previously set using the
 [`header`](commands-header.html) command.
 
 ## Examples
@@ -14,7 +14,7 @@ header("User-Agent", "Scrapeycat")
 
 -- headers = {"User-Agent": "Scrapeycat"}
 
-clearheaders()
+clearHeaders()
 
 -- headers = {}
 ```

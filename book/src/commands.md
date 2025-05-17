@@ -3,7 +3,7 @@
 - [`append`](./commands-append.md)
 - [`apply`](./commands-apply.md)
 - [`clear`](./commands-clear.md)
-- [`clearheaders`](./commands-clearheaders.md)
+- [`clearHeaders`](./commands-clearheaders.md)
 - [`delete`](./commands-delete.md)
 - [`discard`](./commands-discard.md)
 - [`drop`](./commands-drop.md)

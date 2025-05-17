@@ -153,7 +153,7 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
     )?;
 
     lua.globals().set(
-        "clearheaders",
+        "clearHeaders",
         lua.create_function(|lua: &Lua, ()| {
             let mut state = get_state::<H>(lua)?;
 
@@ -789,7 +789,7 @@ mod tests {
             lua,
             r#"
                 header("User-Agent", "Mozilla/Firefox")
-                clearheaders()
+                clearHeaders()
                 get("")
             "#
         );
@@ -1186,7 +1186,7 @@ mod tests {
                 get("")
                 store("$MyVariable")
                 clear()
-                clearheaders()
+                clearHeaders()
                 header("pre{$MyVariable}post", "aff{$MyVariable}suff")
                 get("")
             "#
