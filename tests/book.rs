@@ -188,6 +188,46 @@ impl HttpDriver for BookTestHttpDriver {
     }
 }
 
+async fn run_test(script: String, spec: TestSpec) {
+    TEST_STATE.replace(Some(TestState::new(
+        script,
+        spec.input.unwrap_or("".to_string()),
+        vec![],
+    )));
+
+    let (effect_sender, mut effect_receiver) = unbounded_channel::<EffectInvocation>();
+
+    let result = run::<BookTestHttpDriver>(
+        "",
+        spec.args.unwrap_or(vec![]),
+        spec.kwargs.unwrap_or(HashMap::new()),
+        Arc::new(RwLock::new(script_loader)),
+        effect_sender,
+    )
+    .await
+    .unwrap();
+
+    if let Some(output) = spec.expect.output {
+        assert_eq!(result.into_iter().collect::<Vec<_>>(), output);
+    }
+
+    if let Some(effects) = spec.expect.effects {
+        for effect in effects {
+            assert_eq!(effect, effect_receiver.recv().await.unwrap().into());
+        }
+
+        effect_receiver.close();
+        assert!(effect_receiver.recv().await.is_none());
+    }
+
+    if let Some(headers) = spec.expect.headers {
+        assert_eq!(
+            TEST_STATE.with(|state| state.borrow().as_ref().unwrap().headers_seen.clone()),
+            headers,
+        );
+    }
+}
+
 #[tokio::test]
 async fn test_book() {
     let xamble_templates = HashMap::from([
@@ -222,7 +262,7 @@ async fn test_book() {
                 .as_str()
                 .to_string();
 
-            if let Some(text) = spec.preamble {
+            if let Some(ref text) = spec.preamble {
                 script = format!(
                     "{}\n{script}\n",
                     if text.starts_with("template:") {
@@ -231,12 +271,12 @@ async fn test_book() {
                             .expect("An existing template name should be given")
                             .to_string()
                     } else {
-                        text
+                        text.clone()
                     }
                 )
             }
 
-            if let Some(text) = spec.postamble {
+            if let Some(ref text) = spec.postamble {
                 script = format!(
                     "{script}\n{}\n",
                     if text.starts_with("template:") {
@@ -245,47 +285,179 @@ async fn test_book() {
                             .expect("An existing template name should be given")
                             .to_string()
                     } else {
-                        text
+                        text.clone()
                     }
                 )
             }
 
-            TEST_STATE.replace(Some(TestState::new(
-                script,
-                spec.input.unwrap_or("".to_string()),
-                vec![],
-            )));
-
-            let (effect_sender, mut effect_receiver) = unbounded_channel::<EffectInvocation>();
-
-            let result = run::<BookTestHttpDriver>(
-                "",
-                spec.args.unwrap_or(vec![]),
-                spec.kwargs.unwrap_or(HashMap::new()),
-                Arc::new(RwLock::new(script_loader)),
-                effect_sender,
-            )
-            .await
-            .unwrap();
-
-            if let Some(output) = spec.expect.output {
-                assert_eq!(result.into_iter().collect::<Vec<_>>(), output);
-            }
-
-            if let Some(effects) = spec.expect.effects {
-                for effect in effects {
-                    assert_eq!(effect, effect_receiver.recv().await.unwrap().into());
-                }
-            }
-
-            if let Some(headers) = spec.expect.headers {
-                assert_eq!(
-                    TEST_STATE.with(|state| state.borrow().as_ref().unwrap().headers_seen.clone()),
-                    headers,
-                );
-            }
+            run_test(script, spec).await;
         }
 
         eprintln!("{num_tests}");
     }
+}
+
+#[tokio::test]
+async fn test_run_test_effects_ignored() {
+    let script = r#"
+        effect("print", { "hello", "world" })
+        effect("print", { "goodbye", "world" })
+    "#
+    .to_string();
+
+    let spec = TestSpec {
+        input: None,
+        preamble: None,
+        postamble: None,
+        args: None,
+        kwargs: None,
+        expect: TestExpectSpec {
+            output: None,
+            effects: None,
+            headers: None,
+        },
+    };
+
+    run_test(script, spec).await;
+}
+
+#[tokio::test]
+#[should_panic]
+async fn test_run_test_extraneous_effect() {
+    let script = r#"
+        effect("print", { "hello", "world" })
+        effect("print", { "goodbye", "world" })
+    "#
+    .to_string();
+
+    let spec = TestSpec {
+        input: None,
+        preamble: None,
+        postamble: None,
+        args: None,
+        kwargs: None,
+        expect: TestExpectSpec {
+            output: None,
+            effects: Some(vec![Effect {
+                name: "print".to_string(),
+                args: Some(vec!["hello".to_string(), "world".to_string()]),
+                kwargs: None,
+            }]),
+            headers: None,
+        },
+    };
+
+    run_test(script, spec).await;
+}
+
+#[tokio::test]
+async fn test_run_test_effects_match() {
+    let script = r#"
+        effect("print", { "hello", "world" })
+        effect("print", { "goodbye", "world" })
+    "#
+    .to_string();
+
+    let spec = TestSpec {
+        input: None,
+        preamble: None,
+        postamble: None,
+        args: None,
+        kwargs: None,
+        expect: TestExpectSpec {
+            output: None,
+            effects: Some(vec![
+                Effect {
+                    name: "print".to_string(),
+                    args: Some(vec!["hello".to_string(), "world".to_string()]),
+                    kwargs: None,
+                },
+                Effect {
+                    name: "print".to_string(),
+                    args: Some(vec!["goodbye".to_string(), "world".to_string()]),
+                    kwargs: None,
+                },
+            ]),
+            headers: None,
+        },
+    };
+
+    run_test(script, spec).await;
+}
+
+#[tokio::test]
+#[should_panic]
+async fn test_run_test_effect_mismatch() {
+    let script = r#"
+        effect("print", { "hello", "world" })
+        effect("print", { "goodbye", "world" })
+    "#
+    .to_string();
+
+    let spec = TestSpec {
+        input: None,
+        preamble: None,
+        postamble: None,
+        args: None,
+        kwargs: None,
+        expect: TestExpectSpec {
+            output: None,
+            effects: Some(vec![
+                Effect {
+                    name: "print".to_string(),
+                    args: Some(vec!["hello".to_string(), "world".to_string()]),
+                    kwargs: None,
+                },
+                Effect {
+                    name: "print".to_string(),
+                    args: Some(vec!["adios".to_string(), "world".to_string()]),
+                    kwargs: None,
+                },
+            ]),
+            headers: None,
+        },
+    };
+
+    run_test(script, spec).await;
+}
+
+#[tokio::test]
+#[should_panic]
+async fn test_run_test_effect_missing() {
+    let script = r#"
+        effect("print", { "hello", "world" })
+        effect("print", { "goodbye", "world" })
+    "#
+    .to_string();
+
+    let spec = TestSpec {
+        input: None,
+        preamble: None,
+        postamble: None,
+        args: None,
+        kwargs: None,
+        expect: TestExpectSpec {
+            output: None,
+            effects: Some(vec![
+                Effect {
+                    name: "print".to_string(),
+                    args: Some(vec!["hello".to_string(), "world".to_string()]),
+                    kwargs: None,
+                },
+                Effect {
+                    name: "print".to_string(),
+                    args: Some(vec!["goodbye".to_string(), "world".to_string()]),
+                    kwargs: None,
+                },
+                Effect {
+                    name: "print".to_string(),
+                    args: Some(vec!["fin".to_string()]),
+                    kwargs: None,
+                },
+            ]),
+            headers: None,
+        },
+    };
+
+    run_test(script, spec).await;
 }
