@@ -12,6 +12,7 @@
 
 # Reference
 - [Commands](./commands.md)
+    - [`abortIfEmpty`](./commands-abortifempty.md)
     - [`append`](./commands-append.md)
     - [`apply`](./commands-apply.md)
     - [`clear`](./commands-clear.md)

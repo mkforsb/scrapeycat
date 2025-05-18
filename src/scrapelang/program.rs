@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    ops::Deref,
     sync::{Arc, RwLock},
 };
 
@@ -79,6 +80,17 @@ impl<H: HttpDriver + 'static> LuaScraperState<H> {
     }
 }
 
+#[derive(Debug)]
+struct InterruptedError;
+
+impl std::fmt::Display for InterruptedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Interrupted")
+    }
+}
+
+impl std::error::Error for InterruptedError {}
+
 #[inline(always)]
 fn get_state<H: HttpDriver + 'static>(
     lua: &Lua,
@@ -111,6 +123,19 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
 
     lua.load_std_libs(LuaStdLib::ALL_SAFE)?;
     lua.set_app_data(state);
+
+    lua.globals().set(
+        "abortIfEmpty",
+        lua.create_function(|lua: &Lua, ()| {
+            let state = get_state::<H>(lua)?;
+
+            if state.scraper.results().is_empty() {
+                Err(LuaError::ExternalError(Arc::new(InterruptedError {})))
+            } else {
+                Ok(())
+            }
+        })?,
+    )?;
 
     lua.globals().set(
         "append",
@@ -463,6 +488,16 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
     Ok(lua)
 }
 
+fn is_interruption(error: &LuaError) -> bool {
+    if let LuaError::CallbackError { cause, .. } = error {
+        if let LuaError::ExternalError(inner_error) = cause.deref() {
+            return inner_error.downcast_ref::<InterruptedError>().is_some();
+        }
+    }
+
+    false
+}
+
 pub type ScriptLoaderPointer = Arc<RwLock<dyn Fn(&str) -> Result<String, Error> + Send + Sync>>;
 
 pub async fn run<H: HttpDriver + Send + Sync + 'static>(
@@ -484,7 +519,11 @@ pub async fn run<H: HttpDriver + Send + Sync + 'static>(
 
     let lua = create_lua_context::<H>(args, kwargs, effect_sender, script_loader)?;
 
-    lua.load(lua_code).exec_async().await?;
+    if let Err(e) = lua.load(lua_code).exec_async().await {
+        if !is_interruption(&e) {
+            return Err(e.into());
+        }
+    }
 
     Ok({
         // Workaround for "temporary dropped while borrowed"
@@ -639,6 +678,33 @@ mod tests {
 
         assert_eq!(state.scraper.results(), &results!["hello"]);
         assert_eq!(state.variables.get("test"), Some(&results!["world"]));
+    }
+
+    #[tokio::test]
+    async fn test_lua_abort_if_empty() {
+        let (effect_tx, mut effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        let _ = lua_run_async!(
+            lua,
+            r#"
+                abortIfEmpty()
+                effect("print", { "hello" })
+                get("string://test")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results![]);
+
+        effect_rx.close();
+
+        assert!(effect_rx.recv().await.is_none());
     }
 
     #[tokio::test]
