@@ -526,7 +526,7 @@ mod tests {
 
     macro_rules! lua_run_async {
         ($lua:ident, $script:expr) => {
-            $lua.load($script).exec_async().await.unwrap();
+            $lua.load($script).exec_async().await
         };
     }
 
@@ -654,7 +654,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -676,7 +676,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://world!!")
@@ -701,7 +701,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 function process(results)
@@ -729,7 +729,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 function process(results)
@@ -759,7 +759,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -785,7 +785,7 @@ mod tests {
         )
         .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 header("User-Agent", "Mozilla/Firefox")
@@ -808,7 +808,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://123-456")
@@ -835,7 +835,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://-")
@@ -865,7 +865,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://123-456")
@@ -889,7 +889,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://-")
@@ -919,7 +919,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://123-456")
@@ -949,7 +949,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"effect("notify", {"hello", "world", mode="default"})"#
         );
@@ -977,7 +977,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://variabilitious")
@@ -1013,7 +1013,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://123-456")
@@ -1037,7 +1037,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://-(4.?)")
@@ -1064,7 +1064,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://123-456")
@@ -1088,7 +1088,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(lua, r#"get("string://hello")"#);
+        let _ = lua_run_async!(lua, r#"get("string://hello")"#);
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
 
@@ -1104,7 +1104,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://foobar")
@@ -1132,7 +1132,7 @@ mod tests {
         )
         .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 header("User-Agent", "Mozilla/Firefox")
@@ -1149,7 +1149,7 @@ mod tests {
             );
         }
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 clear()
@@ -1179,7 +1179,7 @@ mod tests {
         )
         .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 header("Test", "123")
@@ -1210,7 +1210,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -1233,7 +1233,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -1266,7 +1266,8 @@ mod tests {
                 clear()
                 load("{myVariable}") -- variable `{myVariable}` not found!
             "#
-        ); // Panic due to `.unwrap()` in the `lua_run_async` macro
+        )
+        .unwrap();
     }
 
     #[tokio::test]
@@ -1307,7 +1308,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://foo")
@@ -1338,7 +1339,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://world")
@@ -1360,7 +1361,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -1385,7 +1386,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://123-456")
@@ -1412,7 +1413,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://5")
@@ -1449,7 +1450,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(lua, r#"run("test123")"#);
+        let _ = lua_run_async!(lua, r#"run("test123")"#);
 
         let state = get_state::<TestHttpDriver>(&lua).unwrap();
         assert_eq!(state.scraper.results(), &results!["bazinga"]);
@@ -1471,7 +1472,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://foobar")
@@ -1497,7 +1498,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -1519,7 +1520,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -1544,7 +1545,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -1567,7 +1568,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello")
@@ -1589,7 +1590,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello world")
@@ -1621,7 +1622,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://hello world")
@@ -1660,7 +1661,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://foo bar baz")
@@ -1692,7 +1693,7 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        lua_run_async!(
+        let _ = lua_run_async!(
             lua,
             r#"
                 get("string://foo bar baz")
