@@ -188,6 +188,7 @@ impl HttpDriver for BookTestHttpDriver {
     }
 }
 
+/// Book test runner
 async fn run_test(script: String, spec: TestSpec) {
     TEST_STATE.replace(Some(TestState::new(
         script,
@@ -228,6 +229,7 @@ async fn run_test(script: String, spec: TestSpec) {
     }
 }
 
+/// Book test main entry point, implements the scanner
 #[tokio::test]
 async fn test_book() {
     let xamble_templates = HashMap::from([
@@ -297,167 +299,172 @@ async fn test_book() {
     }
 }
 
-#[tokio::test]
-async fn test_run_test_effects_ignored() {
-    let script = r#"
-        effect("print", { "hello", "world" })
-        effect("print", { "goodbye", "world" })
-    "#
-    .to_string();
+/// Tests for the book test runner itself
+mod tests {
+    use super::*;
 
-    let spec = TestSpec {
-        input: None,
-        preamble: None,
-        postamble: None,
-        args: None,
-        kwargs: None,
-        expect: TestExpectSpec {
-            output: None,
-            effects: None,
-            headers: None,
-        },
-    };
+    #[tokio::test]
+    async fn test_run_test_effects_ignored() {
+        let script = r#"
+            effect("print", { "hello", "world" })
+            effect("print", { "goodbye", "world" })
+        "#
+        .to_string();
 
-    run_test(script, spec).await;
-}
+        let spec = TestSpec {
+            input: None,
+            preamble: None,
+            postamble: None,
+            args: None,
+            kwargs: None,
+            expect: TestExpectSpec {
+                output: None,
+                effects: None,
+                headers: None,
+            },
+        };
 
-#[tokio::test]
-#[should_panic]
-async fn test_run_test_extraneous_effect() {
-    let script = r#"
-        effect("print", { "hello", "world" })
-        effect("print", { "goodbye", "world" })
-    "#
-    .to_string();
+        run_test(script, spec).await;
+    }
 
-    let spec = TestSpec {
-        input: None,
-        preamble: None,
-        postamble: None,
-        args: None,
-        kwargs: None,
-        expect: TestExpectSpec {
-            output: None,
-            effects: Some(vec![Effect {
-                name: "print".to_string(),
-                args: Some(vec!["hello".to_string(), "world".to_string()]),
-                kwargs: None,
-            }]),
-            headers: None,
-        },
-    };
+    #[tokio::test]
+    #[should_panic]
+    async fn test_run_test_extraneous_effect() {
+        let script = r#"
+            effect("print", { "hello", "world" })
+            effect("print", { "goodbye", "world" })
+        "#
+        .to_string();
 
-    run_test(script, spec).await;
-}
-
-#[tokio::test]
-async fn test_run_test_effects_match() {
-    let script = r#"
-        effect("print", { "hello", "world" })
-        effect("print", { "goodbye", "world" })
-    "#
-    .to_string();
-
-    let spec = TestSpec {
-        input: None,
-        preamble: None,
-        postamble: None,
-        args: None,
-        kwargs: None,
-        expect: TestExpectSpec {
-            output: None,
-            effects: Some(vec![
-                Effect {
+        let spec = TestSpec {
+            input: None,
+            preamble: None,
+            postamble: None,
+            args: None,
+            kwargs: None,
+            expect: TestExpectSpec {
+                output: None,
+                effects: Some(vec![Effect {
                     name: "print".to_string(),
                     args: Some(vec!["hello".to_string(), "world".to_string()]),
                     kwargs: None,
-                },
-                Effect {
-                    name: "print".to_string(),
-                    args: Some(vec!["goodbye".to_string(), "world".to_string()]),
-                    kwargs: None,
-                },
-            ]),
-            headers: None,
-        },
-    };
+                }]),
+                headers: None,
+            },
+        };
 
-    run_test(script, spec).await;
-}
+        run_test(script, spec).await;
+    }
 
-#[tokio::test]
-#[should_panic]
-async fn test_run_test_effect_mismatch() {
-    let script = r#"
-        effect("print", { "hello", "world" })
-        effect("print", { "goodbye", "world" })
-    "#
-    .to_string();
+    #[tokio::test]
+    async fn test_run_test_effects_match() {
+        let script = r#"
+            effect("print", { "hello", "world" })
+            effect("print", { "goodbye", "world" })
+        "#
+        .to_string();
 
-    let spec = TestSpec {
-        input: None,
-        preamble: None,
-        postamble: None,
-        args: None,
-        kwargs: None,
-        expect: TestExpectSpec {
-            output: None,
-            effects: Some(vec![
-                Effect {
-                    name: "print".to_string(),
-                    args: Some(vec!["hello".to_string(), "world".to_string()]),
-                    kwargs: None,
-                },
-                Effect {
-                    name: "print".to_string(),
-                    args: Some(vec!["adios".to_string(), "world".to_string()]),
-                    kwargs: None,
-                },
-            ]),
-            headers: None,
-        },
-    };
+        let spec = TestSpec {
+            input: None,
+            preamble: None,
+            postamble: None,
+            args: None,
+            kwargs: None,
+            expect: TestExpectSpec {
+                output: None,
+                effects: Some(vec![
+                    Effect {
+                        name: "print".to_string(),
+                        args: Some(vec!["hello".to_string(), "world".to_string()]),
+                        kwargs: None,
+                    },
+                    Effect {
+                        name: "print".to_string(),
+                        args: Some(vec!["goodbye".to_string(), "world".to_string()]),
+                        kwargs: None,
+                    },
+                ]),
+                headers: None,
+            },
+        };
 
-    run_test(script, spec).await;
-}
+        run_test(script, spec).await;
+    }
 
-#[tokio::test]
-#[should_panic]
-async fn test_run_test_effect_missing() {
-    let script = r#"
-        effect("print", { "hello", "world" })
-        effect("print", { "goodbye", "world" })
-    "#
-    .to_string();
+    #[tokio::test]
+    #[should_panic]
+    async fn test_run_test_effect_mismatch() {
+        let script = r#"
+            effect("print", { "hello", "world" })
+            effect("print", { "goodbye", "world" })
+        "#
+        .to_string();
 
-    let spec = TestSpec {
-        input: None,
-        preamble: None,
-        postamble: None,
-        args: None,
-        kwargs: None,
-        expect: TestExpectSpec {
-            output: None,
-            effects: Some(vec![
-                Effect {
-                    name: "print".to_string(),
-                    args: Some(vec!["hello".to_string(), "world".to_string()]),
-                    kwargs: None,
-                },
-                Effect {
-                    name: "print".to_string(),
-                    args: Some(vec!["goodbye".to_string(), "world".to_string()]),
-                    kwargs: None,
-                },
-                Effect {
-                    name: "print".to_string(),
-                    args: Some(vec!["fin".to_string()]),
-                    kwargs: None,
-                },
-            ]),
-            headers: None,
-        },
-    };
+        let spec = TestSpec {
+            input: None,
+            preamble: None,
+            postamble: None,
+            args: None,
+            kwargs: None,
+            expect: TestExpectSpec {
+                output: None,
+                effects: Some(vec![
+                    Effect {
+                        name: "print".to_string(),
+                        args: Some(vec!["hello".to_string(), "world".to_string()]),
+                        kwargs: None,
+                    },
+                    Effect {
+                        name: "print".to_string(),
+                        args: Some(vec!["adios".to_string(), "world".to_string()]),
+                        kwargs: None,
+                    },
+                ]),
+                headers: None,
+            },
+        };
 
-    run_test(script, spec).await;
+        run_test(script, spec).await;
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_run_test_effect_missing() {
+        let script = r#"
+            effect("print", { "hello", "world" })
+            effect("print", { "goodbye", "world" })
+        "#
+        .to_string();
+
+        let spec = TestSpec {
+            input: None,
+            preamble: None,
+            postamble: None,
+            args: None,
+            kwargs: None,
+            expect: TestExpectSpec {
+                output: None,
+                effects: Some(vec![
+                    Effect {
+                        name: "print".to_string(),
+                        args: Some(vec!["hello".to_string(), "world".to_string()]),
+                        kwargs: None,
+                    },
+                    Effect {
+                        name: "print".to_string(),
+                        args: Some(vec!["goodbye".to_string(), "world".to_string()]),
+                        kwargs: None,
+                    },
+                    Effect {
+                        name: "print".to_string(),
+                        args: Some(vec!["fin".to_string()]),
+                        kwargs: None,
+                    },
+                ]),
+                headers: None,
+            },
+        };
+
+        run_test(script, spec).await;
+    }
 }
