@@ -293,16 +293,14 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
     lua.globals().set(
         "list",
         lua.create_function(|lua: &Lua, name: String| {
-            Ok(get_state::<H>(lua)?
+            get_state::<H>(lua)?
                 .variables
                 .get(&name)
                 .map(|v| v.iter().cloned().collect::<Vec<_>>())
                 .ok_or_else(|| {
-                    // TODO: Any way to short circuit the entirety of run() from here?
-                    //  Maybe something with set_hook, every line, vmstate stop?
                     error!("variable `{name}` not found");
                     Error::LuaError(format!("variable `{name}` not found")).into_lua_err()
-                }))
+                })
         })?,
     )?;
 
@@ -451,16 +449,14 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
     lua.globals().set(
         "var",
         lua.create_function(|lua: &Lua, name: String| {
-            Ok(get_state::<H>(lua)?
+            get_state::<H>(lua)?
                 .variables
                 .get(&name)
                 .map(|v| v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" "))
                 .ok_or_else(|| {
-                    // TODO: Any way to short circuit the entirety of run() from here?
-                    //  Maybe something with set_hook, every line, vmstate stop?
                     error!("variable `{name}` not found");
                     Error::LuaError(format!("variable `{name}` not found")).into_lua_err()
-                }))
+                })
         })?,
     )?;
 
@@ -1225,6 +1221,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_lua_list_missing() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        assert!(lua_run_async!(
+            lua,
+            r#"
+                local x = list("foo")
+            "#
+        )
+        .is_err());
+    }
+
+    #[tokio::test]
     async fn test_lua_load() {
         let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
         let script_loader = null_script_loader();
@@ -1557,6 +1571,24 @@ mod tests {
         let my_variable = lua_call!(lua, "var", "myVariable" => String);
 
         assert_eq!(my_variable, "hello world");
+    }
+
+    #[tokio::test]
+    async fn test_lua_var_missing() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        assert!(lua_run_async!(
+            lua,
+            r#"
+                local x = var("foo")
+            "#
+        )
+        .is_err());
     }
 
     #[tokio::test]
