@@ -1,4 +1,7 @@
-.PHONY: clean check test nextest coverage
+.PHONY: booktest clean check test nextest coverage
+
+booktest:
+	cargo test --features testutils --test book test_book -- --nocapture
 
 clean:
 	cargo clean -p scrapeycat
