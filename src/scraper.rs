@@ -106,7 +106,8 @@ where
 // result.append("   $group N S       Group results into sets of N using S as glue")
 // result.append("   $join S          Join all results to a single string using S as glue")
 // result.append("   $jsonpath E      Replace each result R with json.enc(E.find(json.dec(R)))")
-// result.append("   $jsonvals E      Replace results with [x for x in E.find(json.dec(R)) for R in results]")
+// result.append("   $jsonvals E
+//                   Replace results with [x for x in E.find(json.dec(R)) for R in results]")
 
 impl<H> Scraper<H>
 where
