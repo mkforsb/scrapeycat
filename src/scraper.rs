@@ -1,12 +1,14 @@
 use std::{cmp::min, future::Future, marker::PhantomData};
 
 use im::{vector, HashMap, Vector};
+use jsonpath_rust::JsonPath;
 use log::debug;
 use regex::Regex;
 use reqwest::{
     header::{HeaderMap, HeaderName, InvalidHeaderValue},
     ClientBuilder,
 };
+use serde_json::Value as JsonValue;
 
 use crate::Error;
 
@@ -301,6 +303,38 @@ where
             ..self.clone()
         }
     }
+
+    pub fn jsonpath(&self, expr: &str) -> Result<Scraper<H>, Error> {
+        Ok(Scraper {
+            results: self
+                .results
+                .iter()
+                .map(|str| match str.parse::<JsonValue>() {
+                    Ok(json) => json
+                        .query(expr)
+                        .map(|matches| matches.into_iter().cloned().collect::<Vec<_>>())
+                        .map_err(Error::JsonPathError),
+                    Err(e) => Err(Error::JsonParseError(e.to_string())),
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten()
+                .map(|value| jsonval_to_string(&value))
+                .collect::<Vector<_>>(),
+            ..self.clone()
+        })
+    }
+}
+
+fn jsonval_to_string(value: &JsonValue) -> String {
+    match value {
+        JsonValue::Null => String::from("null"),
+        JsonValue::Bool(value) => value.to_string(),
+        JsonValue::Number(number) => number.to_string(),
+        JsonValue::String(str) => str.clone(),
+        JsonValue::Array(_) => todo!(),
+        JsonValue::Object(_) => todo!(),
+    }
 }
 
 #[cfg(test)]
@@ -556,5 +590,69 @@ mod tests {
             scraper.discard("a").unwrap().results(),
             &results!["dog", "sheep"]
         );
+    }
+
+    #[test]
+    fn test_jsonpath() {
+        let sorted = |xs: &Vector<String>| -> Vector<String> {
+            let mut result = xs.clone();
+            result.sort();
+            result
+        };
+
+        let scraper = nullscraper().with_results(results![
+            r#"{
+                "authors": {
+                    "horror": ["Garth Marenghi"],
+                    "fantasy": ["J. R. R. Tolkien", "George R. R. Martin"]
+                }
+            }"#
+        ]);
+
+        assert_eq!(
+            scraper.jsonpath("$.authors.horror[0]").unwrap().results(),
+            &results!["Garth Marenghi"]
+        );
+
+        assert_eq!(
+            sorted(
+                scraper
+                    .jsonpath(r#"$.authors.*[?search(@, "^G")]"#)
+                    .unwrap()
+                    .results()
+            ),
+            sorted(&results!["Garth Marenghi", "George R. R. Martin"])
+        );
+    }
+
+    #[test]
+    fn test_jsonpath_parse_error() {
+        let scraper = nullscraper().with_results(results![
+            r#"{
+                "authors": {
+                    "horror": ["Garth Marenghi"],
+            }"#
+        ]);
+
+        assert!(matches!(
+            scraper.jsonpath("$.authors"),
+            Err(Error::JsonParseError(_))
+        ));
+    }
+
+    #[test]
+    fn test_jsonpath_path_error() {
+        let scraper = nullscraper().with_results(results![
+            r#"{
+                "authors": {
+                    "horror": ["Garth Marenghi"]
+                }
+            }"#
+        ]);
+
+        assert!(matches!(
+            scraper.jsonpath("authors"),
+            Err(Error::JsonPathError(_))
+        ));
     }
 }

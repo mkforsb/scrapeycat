@@ -9,6 +9,7 @@ pub mod testutils;
 
 use std::{io, num::ParseIntError};
 
+use jsonpath_rust::parser::errors::JsonPathError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -63,4 +64,10 @@ pub enum Error {
 
     #[error("Lua error: {0}")]
     LuaError(String),
+
+    #[error("JSON parse error: {0}")]
+    JsonParseError(String),
+
+    #[error("JSONPath error: {0}")]
+    JsonPathError(#[from] JsonPathError),
 }

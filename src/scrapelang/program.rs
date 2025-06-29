@@ -346,6 +346,19 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
     )?;
 
     lua.globals().set(
+        "jsonPath",
+        lua.create_function(|lua: &Lua, expr: String| {
+            let mut state = get_state::<H>(lua)?;
+
+            state.scraper = state
+                .scraper
+                .jsonpath(&substitute_variables(&expr, &state.variables)?)?;
+
+            Ok(())
+        })?,
+    )?;
+
+    lua.globals().set(
         "list",
         lua.create_function(|lua: &Lua, name: String| {
             get_state::<H>(lua)?
@@ -1327,6 +1340,40 @@ mod tests {
             // Variable substitution only occurs for the value
             &results![r#"Headers({"pre{$MyVariable}post": "affHeaders({"Test": "123"})suff"})"#]
         );
+    }
+
+    #[tokio::test]
+    async fn test_lua_jsonpath() {
+        let (effect_tx, _effect_rx) = unbounded_channel::<EffectInvocation>();
+        let script_loader = null_script_loader();
+
+        let lua =
+            create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
+                .unwrap();
+
+        let _ = lua_run_async!(
+            lua,
+            r#"
+                get([[string://{{
+                  "authors": {
+                    "horror": [
+                      "Garth Marenghi",
+                      "Steven King"
+                    ],
+                    "scifi": [
+                      "Carl Sagan",
+                      "Isaac Asimov"
+                    ]
+                  }
+                }}]])
+                
+                jsonPath("$.authors.horror[0]")
+            "#
+        );
+
+        let state = get_state::<TestHttpDriver>(&lua).unwrap();
+
+        assert_eq!(state.scraper.results(), &results!["Garth Marenghi"]);
     }
 
     #[tokio::test]
