@@ -7,7 +7,6 @@ use std::{
 use im::{vector, Vector};
 use log::error;
 use mlua::prelude::*;
-use regex::Regex;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
@@ -16,41 +15,72 @@ use crate::{
     Error,
 };
 
+fn balanced_delimited_range(text: &str, open: char, close: char) -> Option<&str> {
+    let mut depth = 0;
+    let mut result = None;
+
+    if !text.starts_with(open) {
+        return None;
+    }
+
+    for (index, ch) in text.char_indices() {
+        if ch == open {
+            depth += 1;
+        } else if ch == close {
+            depth -= 1;
+
+            if depth == 0 {
+                result = Some(&text[..=index]);
+                break;
+            }
+        }
+    }
+
+    result
+}
+
+/// This function was refactored with the help of generative AI.
 fn substitute_variables(
     text: &str,
     variables: &HashMap<String, Vector<String>>,
 ) -> Result<String, Error> {
-    let mut result = text.to_string();
-    let mut delta: i32 = 0;
-    let matcher = Regex::new("\\{(.+?)\\}").expect("Should be a valid regex");
+    let mut result = String::new();
+    let mut remaining = text;
+    let mut variable_buf: String;
 
-    for matched in matcher.captures_iter(text) {
-        let group = matched.get(1).expect("Group 1 should exist");
-        let varname = group.as_str().to_string();
-        let matched_range = matched.get(0).expect("Group 0 should always exist").range();
-        let old_len = result.len();
+    while let Some(start) = remaining.find('{') {
+        // Append text before '{'
+        result.push_str(&remaining[..start]);
+        remaining = &remaining[start..];
 
-        result.replace_range(
-            if delta >= 0 {
-                (matched_range.start.saturating_sub(delta as usize))
-                    ..(matched_range.end.saturating_sub(delta as usize))
+        if let Some(matched) = balanced_delimited_range(remaining, '{', '}') {
+            let inner = &matched[1..matched.len() - 1];
+
+            let replacement = if matched.starts_with("{{") {
+                inner
             } else {
-                (matched_range.start.saturating_add(-delta as usize))
-                    ..(matched_range.end.saturating_add(-delta as usize))
-            },
-            variables
-                .get(&varname)
-                .ok_or(Error::VariableNotFoundError(varname))?
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>()
-                .join("")
-                .as_str(),
-        );
+                variable_buf = variables
+                    .get(inner)
+                    .ok_or_else(|| Error::VariableNotFoundError(inner.to_string()))?
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("");
 
-        delta += (old_len as i32) - (result.len() as i32);
+                &variable_buf
+            };
+
+            result.push_str(replacement);
+            remaining = &remaining[matched.len()..];
+        } else {
+            // No closing '}' found, append '{' and continue
+            result.push('{');
+            remaining = &remaining[1..];
+        }
     }
 
+    // Append any remaining text after last '}'
+    result.push_str(remaining);
     Ok(result)
 }
 
@@ -652,6 +682,42 @@ mod tests {
                     assert_eq!(result, "x1 1 foo 2345 bar  678912 baz 1");
                     true
                 })
+        );
+    }
+
+    #[test]
+    fn test_substitute_variables_escaped_braces() {
+        let variables = HashMap::from([
+            ("x1".to_string(), results!["1"]),      // Result gets shorter
+            ("x2".to_string(), results!["2345"]),   // Result stays same length
+            ("x3".to_string(), results!["678912"]), // Result gets longer
+        ]);
+
+        assert!(
+            substitute_variables("x1 {x1} {{x1}} {{ x1 { foo bar } }}", &variables).is_ok_and(
+                |result| {
+                    assert_eq!(result, "x1 1 {x1} { x1 { foo bar } }");
+                    true
+                }
+            )
+        );
+
+        assert!(
+            substitute_variables("x2 {x2} {{x2}} {{ x2 { foo bar } }}", &variables).is_ok_and(
+                |result| {
+                    assert_eq!(result, "x2 2345 {x2} { x2 { foo bar } }");
+                    true
+                }
+            )
+        );
+
+        assert!(
+            substitute_variables("x3 {x3} {{x3}} {{ x3 { foo bar } }}", &variables).is_ok_and(
+                |result| {
+                    assert_eq!(result, "x3 678912 {x3} { x3 { foo bar } }");
+                    true
+                }
+            )
         );
     }
 
@@ -1849,5 +1915,13 @@ mod tests {
             );
             true
         }));
+    }
+
+    #[test]
+    fn test_balanced_delimited_range() {
+        assert!(balanced_delimited_range("", '{', '}').is_none());
+        assert!(balanced_delimited_range("{", '{', '}').is_none());
+        assert_eq!(balanced_delimited_range("{}", '{', '}'), Some("{}"));
+        assert_eq!(balanced_delimited_range("{{}}", '{', '}'), Some("{{}}"));
     }
 }
