@@ -7,6 +7,7 @@ use std::{
 use im::{vector, Vector};
 use log::error;
 use mlua::prelude::*;
+use regex::Regex;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
@@ -15,30 +16,6 @@ use crate::{
     Error,
 };
 
-fn balanced_delimited_range(text: &str, open: char, close: char) -> Option<&str> {
-    let mut depth = 0;
-    let mut result = None;
-
-    if !text.starts_with(open) {
-        return None;
-    }
-
-    for (index, ch) in text.char_indices() {
-        if ch == open {
-            depth += 1;
-        } else if ch == close {
-            depth -= 1;
-
-            if depth == 0 {
-                result = Some(&text[..=index]);
-                break;
-            }
-        }
-    }
-
-    result
-}
-
 /// This function was refactored with the help of generative AI.
 fn substitute_variables(
     text: &str,
@@ -46,42 +23,39 @@ fn substitute_variables(
 ) -> Result<String, Error> {
     let mut result = String::new();
     let mut remaining = text;
-    let mut variable_buf: String;
+    let matcher = Regex::new("(?s)^\\{(.+?)\\}").expect("Should be a valid regex");
 
     while let Some(start) = remaining.find('{') {
         // Append text before '{'
         result.push_str(&remaining[..start]);
         remaining = &remaining[start..];
 
-        if let Some(matched) = balanced_delimited_range(remaining, '{', '}') {
-            let inner = &matched[1..matched.len() - 1];
+        if remaining.starts_with("{{") {
+            result.push_str("{{");
+            remaining = &remaining[2..];
+        } else if let Some(matched) = matcher.captures(remaining) {
+            let varname = matched.get(1).expect("Group 1 should exist").as_str();
 
-            let replacement = if matched.starts_with("{{") {
-                inner
-            } else {
-                variable_buf = variables
-                    .get(inner)
-                    .ok_or_else(|| Error::VariableNotFoundError(inner.to_string()))?
+            result.push_str(
+                variables
+                    .get(varname)
+                    .ok_or_else(|| Error::VariableNotFoundError(varname.to_string()))?
                     .iter()
                     .cloned()
                     .collect::<Vec<_>>()
-                    .join("");
+                    .join("")
+                    .as_str(),
+            );
 
-                &variable_buf
-            };
-
-            result.push_str(replacement);
-            remaining = &remaining[matched.len()..];
+            remaining = &remaining[matched.get(0).expect("Group 0 always exists").range().end..]
         } else {
-            // No closing '}' found, append '{' and continue
-            result.push('{');
-            remaining = &remaining[1..];
+            return Err(Error::ParseError("Unbalanced unescaped braces".to_string()));
         }
     }
 
     // Append any remaining text after last '}'
     result.push_str(remaining);
-    Ok(result)
+    Ok(result.replace("{{", "{").replace("}}", "}"))
 }
 
 impl From<mlua::Error> for Error {
@@ -707,7 +681,7 @@ mod tests {
         ]);
 
         assert!(
-            substitute_variables("x1 {x1} {{x1}} {{ x1 { foo bar } }}", &variables).is_ok_and(
+            substitute_variables("x1 {x1} {{x1}} {{ x1 {{ foo bar }} }}", &variables).is_ok_and(
                 |result| {
                     assert_eq!(result, "x1 1 {x1} { x1 { foo bar } }");
                     true
@@ -716,7 +690,7 @@ mod tests {
         );
 
         assert!(
-            substitute_variables("x2 {x2} {{x2}} {{ x2 { foo bar } }}", &variables).is_ok_and(
+            substitute_variables("x2 {x2} {{x2}} {{ x2 {{ foo bar }} }}", &variables).is_ok_and(
                 |result| {
                     assert_eq!(result, "x2 2345 {x2} { x2 { foo bar } }");
                     true
@@ -725,7 +699,7 @@ mod tests {
         );
 
         assert!(
-            substitute_variables("x3 {x3} {{x3}} {{ x3 { foo bar } }}", &variables).is_ok_and(
+            substitute_variables("x3 {x3} {{x3}} {{ x3 {{ foo bar }} }}", &variables).is_ok_and(
                 |result| {
                     assert_eq!(result, "x3 678912 {x3} { x3 { foo bar } }");
                     true
@@ -1355,7 +1329,7 @@ mod tests {
             lua,
             r#"
                 get([[string://{{
-                  "authors": {
+                  "authors": {{
                     "horror": [
                       "Garth Marenghi",
                       "Steven King"
@@ -1364,7 +1338,7 @@ mod tests {
                       "Carl Sagan",
                       "Isaac Asimov"
                     ]
-                  }
+                  }}
                 }}]])
                 
                 jsonPath("$.authors.horror[0]")
@@ -1962,13 +1936,5 @@ mod tests {
             );
             true
         }));
-    }
-
-    #[test]
-    fn test_balanced_delimited_range() {
-        assert!(balanced_delimited_range("", '{', '}').is_none());
-        assert!(balanced_delimited_range("{", '{', '}').is_none());
-        assert_eq!(balanced_delimited_range("{}", '{', '}'), Some("{}"));
-        assert_eq!(balanced_delimited_range("{{}}", '{', '}'), Some("{{}}"));
     }
 }
