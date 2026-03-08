@@ -1,19 +1,19 @@
 use std::{
     collections::{HashMap, VecDeque},
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, RwLock,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
-use bolero::{check, r#gen};
+use bolero::{check, produce};
 use im::vector;
 use libscrapeycat::{
+    Error,
     effect::EffectInvocation,
     scrapelang::program::run,
     scraper::{HttpDriver, HttpHeaders},
-    Error,
 };
 use regex::Regex;
 use tokio::{sync::mpsc::unbounded_channel, time::sleep};
@@ -48,7 +48,7 @@ async fn test_stress() {
     let num_tasks_inner = Arc::clone(&num_tasks_outer);
 
     check!()
-        .with_generator(gen::<[u16; 1000]>())
+        .with_generator(produce::<[u16; 1000]>())
         .with_iterations(1)
         .with_shrink_time(Duration::ZERO)
         .for_each(|xs| {

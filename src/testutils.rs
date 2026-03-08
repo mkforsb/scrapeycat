@@ -3,8 +3,8 @@
 use std::{env, fs};
 
 use crate::{
-    scraper::{HttpDriver, HttpHeaders},
     Error,
+    scraper::{HttpDriver, HttpHeaders},
 };
 
 /// `path_in_project_root!("foo")` -> `"/<projectroot>/foo"`, where `<projectroot>` is the path
@@ -28,9 +28,9 @@ pub struct TestHttpDriver;
 impl HttpDriver for TestHttpDriver {
     async fn get(url: &str, _headers: HttpHeaders<'_>) -> Result<String, Error> {
         if url.starts_with("file://") {
-            Ok(fs::read_to_string(path_in_project_root!(url
-                .strip_prefix("file://")
-                .unwrap()))?)
+            Ok(fs::read_to_string(path_in_project_root!(
+                url.strip_prefix("file://").unwrap()
+            ))?)
         } else if url.starts_with("string://") {
             Ok(url.strip_prefix("string://").unwrap().to_string())
         } else {

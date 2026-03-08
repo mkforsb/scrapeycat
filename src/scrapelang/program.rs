@@ -4,16 +4,16 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use im::{vector, Vector};
+use im::{Vector, vector};
 use log::error;
 use mlua::prelude::*;
 use regex::Regex;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
+    Error,
     effect::EffectInvocation,
     scraper::{HttpDriver, Scraper},
-    Error,
 };
 
 /// This function was refactored with the help of generative AI.
@@ -506,10 +506,10 @@ fn create_lua_context<H: HttpDriver + Send + Sync + 'static>(
 }
 
 fn is_interruption(error: &LuaError) -> bool {
-    if let LuaError::CallbackError { cause, .. } = error {
-        if let LuaError::ExternalError(inner_error) = cause.deref() {
-            return inner_error.downcast_ref::<InterruptedError>().is_some();
-        }
+    if let LuaError::CallbackError { cause, .. } = error
+        && let LuaError::ExternalError(inner_error) = cause.deref()
+    {
+        return inner_error.downcast_ref::<InterruptedError>().is_some();
     }
 
     false
@@ -536,16 +536,16 @@ pub async fn run<H: HttpDriver + Send + Sync + 'static>(
 
     let lua = create_lua_context::<H>(args, kwargs, effect_sender, script_loader)?;
 
-    if let Err(e) = lua.load(lua_code).exec_async().await {
-        if !is_interruption(&e) {
-            return Err(e.into());
-        }
+    if let Err(e) = lua.load(lua_code).exec_async().await
+        && !is_interruption(&e)
+    {
+        return Err(e.into());
     }
 
     Ok({
         // Workaround for "temporary dropped while borrowed"
-        let results = get_state::<H>(&lua)?.scraper.results().clone();
-        results
+
+        get_state::<H>(&lua)?.scraper.results().clone()
     })
 }
 
@@ -601,8 +601,10 @@ mod tests {
 
     #[test]
     fn test_substitute_variables_missing_var() {
-        assert!(substitute_variables("{x}", &HashMap::new())
-            .is_err_and(|e| matches!(e, Error::VariableNotFoundError(_))));
+        assert!(
+            substitute_variables("{x}", &HashMap::new())
+                .is_err_and(|e| matches!(e, Error::VariableNotFoundError(_)))
+        );
     }
 
     #[test]
@@ -1382,13 +1384,15 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        assert!(lua_run_async!(
-            lua,
-            r#"
+        assert!(
+            lua_run_async!(
+                lua,
+                r#"
                 local x = list("foo")
             "#
-        )
-        .is_err());
+            )
+            .is_err()
+        );
     }
 
     #[tokio::test]
@@ -1735,13 +1739,15 @@ mod tests {
             create_lua_context::<TestHttpDriver>(vec![], HashMap::new(), effect_tx, script_loader)
                 .unwrap();
 
-        assert!(lua_run_async!(
-            lua,
-            r#"
+        assert!(
+            lua_run_async!(
+                lua,
+                r#"
                 local x = var("foo")
             "#
-        )
-        .is_err());
+            )
+            .is_err()
+        );
     }
 
     #[tokio::test]

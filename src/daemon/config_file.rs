@@ -5,11 +5,11 @@ use std::{collections::HashMap, fs};
 use serde::Deserialize;
 
 use crate::{
+    Error,
     daemon::{
         config::Config,
         suite::{Job, Suite},
     },
-    Error,
 };
 
 use super::cron::CronSpec;
@@ -163,10 +163,12 @@ jobs = [
         assert_eq!(&suite_default.jobs[1].name, &None::<String>);
         assert_eq!(&suite_default.jobs[1].script, "foo");
         assert!(suite_default.jobs[1].args.is_none());
-        assert!(suite_default.jobs[1]
-            .kwargs
-            .as_ref()
-            .is_some_and(|kwargs| { kwargs.get("foo").is_some_and(|value| value == "bar") }));
+        assert!(
+            suite_default.jobs[1]
+                .kwargs
+                .as_ref()
+                .is_some_and(|kwargs| { kwargs.get("foo").is_some_and(|value| value == "bar") })
+        );
         assert_eq!(suite_default.jobs[1].schedule, "*/5 * * * *");
         assert!(suite_default.jobs[1].dedup);
     }
@@ -197,8 +199,10 @@ jobs = [
 
     #[test]
     fn test_get_version() {
-        assert!(ConfigFile::get_version(asset_path!("valid/v1_empty.toml"))
-            .is_ok_and(|version| version == 1));
+        assert!(
+            ConfigFile::get_version(asset_path!("valid/v1_empty.toml"))
+                .is_ok_and(|version| version == 1)
+        );
 
         assert!(
             ConfigFile::get_version(asset_path!("valid/v1_one_suite.toml"))

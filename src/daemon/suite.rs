@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Local};
 use regex::Regex;
 
-use crate::{daemon::cron::CronSpec, Error};
+use crate::{Error, daemon::cron::CronSpec};
 
 #[derive(Debug, Clone)]
 pub struct Suite {

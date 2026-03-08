@@ -7,10 +7,10 @@ use std::{
 };
 
 use libscrapeycat::{
+    Error,
     effect::EffectInvocation,
     scrapelang::program::run,
-    testutils::{path_in_project_root, TestHttpDriver},
-    Error,
+    testutils::{TestHttpDriver, path_in_project_root},
 };
 
 /// The script loader for these tests loads `{name}.scrape` from

@@ -3,8 +3,8 @@ use std::str::FromStr;
 use winnow::Parser;
 
 use crate::{
-    util::boundedu8::{BoundedU8, BoundedU8RangeInclusive, UpperBoundedNonZeroU8},
     Error,
+    util::boundedu8::{BoundedU8, BoundedU8RangeInclusive, UpperBoundedNonZeroU8},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,12 +107,12 @@ impl FromStr for CronSpec {
 
 mod parse {
     use winnow::{
+        ModalResult, Parser,
         ascii::{digit1, multispace0, multispace1},
         combinator::{alt, cut_err, opt, peek},
         error::{AddContext, ContextError, ErrMode, ParserError, StrContext},
         stream::Stream,
         token::literal,
-        ModalResult, Parser,
     };
 
     use super::{CronSpec, CronSpecItem};
@@ -314,14 +314,14 @@ mod parse {
 mod tests {
     use std::ops::Bound;
 
-    use bolero::{check, gen, TypeGenerator};
+    use bolero::{TypeGenerator, check, produce};
     use regex::Regex;
 
     use super::*;
 
     #[derive(Debug, Clone, TypeGenerator)]
     struct Single<const L: u8, const H: u8> {
-        #[generator(gen::<u8>().with().bounds(L..=H))]
+        #[generator(produce::<u8>().with().bounds(L..=H))]
         value: u8,
     }
 
@@ -346,7 +346,7 @@ mod tests {
 
     #[derive(Debug, Clone, TypeGenerator)]
     struct Step<const H: u8> {
-        #[generator(gen::<u8>().with().bounds(1..=H))]
+        #[generator(produce::<u8>().with().bounds(1..=H))]
         value: u8,
     }
 
@@ -382,19 +382,19 @@ mod tests {
 
     #[derive(Debug, Clone, TypeGenerator)]
     struct ValidSpec {
-        #[generator(gen::<Vec<_>>().with().len(1..=3))]
+        #[generator(produce::<Vec<_>>().with().len(1..=3))]
         minute: Vec<Item<0, 59>>,
 
-        #[generator(gen::<Vec<_>>().with().len(1..=3))]
+        #[generator(produce::<Vec<_>>().with().len(1..=3))]
         hour: Vec<Item<0, 23>>,
 
-        #[generator(gen::<Vec<_>>().with().len(1..=3))]
+        #[generator(produce::<Vec<_>>().with().len(1..=3))]
         day_of_month: Vec<Item<1, 31>>,
 
-        #[generator(gen::<Vec<_>>().with().len(1..=3))]
+        #[generator(produce::<Vec<_>>().with().len(1..=3))]
         month: Vec<Item<1, 12>>,
 
-        #[generator(gen::<Vec<_>>().with().len(1..=3))]
+        #[generator(produce::<Vec<_>>().with().len(1..=3))]
         day_of_week: Vec<Item<1, 7>>,
     }
 
@@ -452,7 +452,7 @@ mod tests {
     #[test]
     fn test_arbitrary_valid() {
         check!()
-            .with_generator(gen::<ValidSpec>())
+            .with_generator(produce::<ValidSpec>())
             .with_max_len(1000)
             .for_each(|spec| {
                 assert!(spec.to_syntax().parse::<CronSpec>().is_ok());
@@ -462,7 +462,7 @@ mod tests {
     #[test]
     fn test_arbitrary_valid_extra_whitespace() {
         check!()
-            .with_generator(gen::<ValidSpec>())
+            .with_generator(produce::<ValidSpec>())
             .with_max_len(1000)
             .for_each(|spec| {
                 let syntax = spec.to_syntax();
@@ -477,7 +477,7 @@ mod tests {
     #[test]
     fn test_arbitrary_valid_corrupt_step() {
         check!()
-            .with_generator(gen::<ValidSpec>())
+            .with_generator(produce::<ValidSpec>())
             .with_max_len(1000)
             .for_each(|spec| {
                 let syntax = spec.to_syntax();
@@ -485,17 +485,21 @@ mod tests {
                 if syntax.contains("/") {
                     let replace = Regex::new("/\\d+").expect("valid regex");
 
-                    assert!(replace
-                        .replace_all(&syntax, "/0")
-                        .to_string()
-                        .parse::<CronSpec>()
-                        .is_err());
+                    assert!(
+                        replace
+                            .replace_all(&syntax, "/0")
+                            .to_string()
+                            .parse::<CronSpec>()
+                            .is_err()
+                    );
 
-                    assert!(replace
-                        .replace_all(&syntax, "/999")
-                        .to_string()
-                        .parse::<CronSpec>()
-                        .is_err());
+                    assert!(
+                        replace
+                            .replace_all(&syntax, "/999")
+                            .to_string()
+                            .parse::<CronSpec>()
+                            .is_err()
+                    );
                 }
             });
     }
@@ -511,40 +515,42 @@ mod tests {
             true
         }));
 
-        assert!("*/3 1,2 3/4 5-6 1-5/2"
-            .parse::<CronSpec>()
-            .is_ok_and(|result| {
-                assert_eq!(
-                    result.minute,
-                    vec![CronSpecItem::AnyStepped(3.try_into().unwrap())]
-                );
-                assert_eq!(
-                    result.hour,
-                    vec![
-                        CronSpecItem::Single(1.try_into().unwrap()),
-                        CronSpecItem::Single(2.try_into().unwrap())
-                    ]
-                );
-                assert_eq!(
-                    result.day_of_month,
-                    vec![CronSpecItem::SingleStepped(
-                        3.try_into().unwrap(),
-                        4.try_into().unwrap()
-                    )]
-                );
-                assert_eq!(
-                    result.month,
-                    vec![CronSpecItem::Range((5..=6).try_into().unwrap())]
-                );
-                assert_eq!(
-                    result.day_of_week,
-                    vec![CronSpecItem::RangeStepped(
-                        (1..=5).try_into().unwrap(),
-                        2.try_into().unwrap()
-                    )]
-                );
-                true
-            }));
+        assert!(
+            "*/3 1,2 3/4 5-6 1-5/2"
+                .parse::<CronSpec>()
+                .is_ok_and(|result| {
+                    assert_eq!(
+                        result.minute,
+                        vec![CronSpecItem::AnyStepped(3.try_into().unwrap())]
+                    );
+                    assert_eq!(
+                        result.hour,
+                        vec![
+                            CronSpecItem::Single(1.try_into().unwrap()),
+                            CronSpecItem::Single(2.try_into().unwrap())
+                        ]
+                    );
+                    assert_eq!(
+                        result.day_of_month,
+                        vec![CronSpecItem::SingleStepped(
+                            3.try_into().unwrap(),
+                            4.try_into().unwrap()
+                        )]
+                    );
+                    assert_eq!(
+                        result.month,
+                        vec![CronSpecItem::Range((5..=6).try_into().unwrap())]
+                    );
+                    assert_eq!(
+                        result.day_of_week,
+                        vec![CronSpecItem::RangeStepped(
+                            (1..=5).try_into().unwrap(),
+                            2.try_into().unwrap()
+                        )]
+                    );
+                    true
+                })
+        );
     }
 
     #[test]
@@ -639,35 +645,49 @@ mod tests {
 
     #[test]
     fn test_cronspec_to_regex() {
-        assert!("* * * * *"
-            .parse::<CronSpec>()
-            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(..)(..)" }));
+        assert!(
+            "* * * * *"
+                .parse::<CronSpec>()
+                .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(..)(..)" })
+        );
 
-        assert!("1,5 * * * *"
-            .parse::<CronSpec>()
-            .is_ok_and(|result| { result.to_regex_pattern() == "(01|05)(..)(..)(..)(..)" }));
+        assert!(
+            "1,5 * * * *"
+                .parse::<CronSpec>()
+                .is_ok_and(|result| { result.to_regex_pattern() == "(01|05)(..)(..)(..)(..)" })
+        );
 
-        assert!("* 2-3 * * *"
-            .parse::<CronSpec>()
-            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(02|03)(..)(..)(..)" }));
+        assert!(
+            "* 2-3 * * *"
+                .parse::<CronSpec>()
+                .is_ok_and(|result| { result.to_regex_pattern() == "(..)(02|03)(..)(..)(..)" })
+        );
 
-        assert!("* * 4/10 * *"
-            .parse::<CronSpec>()
-            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(04|14|24)(..)(..)" }));
+        assert!(
+            "* * 4/10 * *"
+                .parse::<CronSpec>()
+                .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(04|14|24)(..)(..)" })
+        );
 
-        assert!("* * * 3-7/2 *"
-            .parse::<CronSpec>()
-            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(03|05|07)(..)" }));
+        assert!(
+            "* * * 3-7/2 *"
+                .parse::<CronSpec>()
+                .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(03|05|07)(..)" })
+        );
 
-        assert!("* * * * */3"
-            .parse::<CronSpec>()
-            .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(..)(01|04|07)" }));
+        assert!(
+            "* * * * */3"
+                .parse::<CronSpec>()
+                .is_ok_and(|result| { result.to_regex_pattern() == "(..)(..)(..)(..)(01|04|07)" })
+        );
 
-        assert!("2,7 4-6 10/5 2/4 */2"
-            .parse::<CronSpec>()
-            .is_ok_and(|result| {
-                result.to_regex_pattern()
-                    == "(02|07)(04|05|06)(10|15|20|25|30)(02|06|10)(01|03|05|07)"
-            }));
+        assert!(
+            "2,7 4-6 10/5 2/4 */2"
+                .parse::<CronSpec>()
+                .is_ok_and(|result| {
+                    result.to_regex_pattern()
+                        == "(02|07)(04|05|06)(10|15|20|25|30)(02|06|10)(01|03|05|07)"
+                })
+        );
     }
 }

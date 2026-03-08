@@ -1,12 +1,12 @@
 use std::{cmp::min, future::Future, marker::PhantomData};
 
-use im::{vector, HashMap, Vector};
+use im::{HashMap, Vector, vector};
 use jsonpath_rust::JsonPath;
 use log::debug;
 use regex::Regex;
 use reqwest::{
-    header::{HeaderMap, HeaderName, InvalidHeaderValue},
     ClientBuilder,
+    header::{HeaderMap, HeaderName, InvalidHeaderValue},
 };
 use serde_json::Value as JsonValue;
 
@@ -272,12 +272,13 @@ where
             results: if self.results.is_empty() {
                 vector![]
             } else {
-                vector![self
-                    .results
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(separator)]
+                vector![
+                    self.results
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(separator)
+                ]
             },
             ..self.clone()
         }
@@ -532,17 +533,21 @@ mod tests {
 
         assert_eq!(scraper.results.len(), 1);
 
-        assert!(!scraper
-            .results
-            .get(0)
-            .unwrap()
-            .contains("[User-Agent]:[Scrapeycat 1.2.3]"));
+        assert!(
+            !scraper
+                .results
+                .get(0)
+                .unwrap()
+                .contains("[User-Agent]:[Scrapeycat 1.2.3]")
+        );
 
-        assert!(!scraper
-            .results
-            .get(0)
-            .unwrap()
-            .contains("[Accept-Charset]:[utf-8]"));
+        assert!(
+            !scraper
+                .results
+                .get(0)
+                .unwrap()
+                .contains("[Accept-Charset]:[utf-8]")
+        );
 
         let scraper = Scraper::<HeaderTestingHttpDriver>::new()
             .set_header("User-Agent".to_string(), "Scrapeycat 1.2.3".to_string())
@@ -553,17 +558,21 @@ mod tests {
 
         assert_eq!(scraper.results.len(), 1);
 
-        assert!(scraper
-            .results
-            .get(0)
-            .unwrap()
-            .contains("[User-Agent]:[Scrapeycat 1.2.3]"));
+        assert!(
+            scraper
+                .results
+                .get(0)
+                .unwrap()
+                .contains("[User-Agent]:[Scrapeycat 1.2.3]")
+        );
 
-        assert!(scraper
-            .results
-            .get(0)
-            .unwrap()
-            .contains("[Accept-Charset]:[utf-8]"));
+        assert!(
+            scraper
+                .results
+                .get(0)
+                .unwrap()
+                .contains("[Accept-Charset]:[utf-8]")
+        );
     }
 
     #[tokio::test]
@@ -575,11 +584,13 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(!scraper
-            .results
-            .get(0)
-            .unwrap()
-            .contains("[User-Agent]:[Scrapeycat 1.2.3]"));
+        assert!(
+            !scraper
+                .results
+                .get(0)
+                .unwrap()
+                .contains("[User-Agent]:[Scrapeycat 1.2.3]")
+        );
     }
 
     #[test]

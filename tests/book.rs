@@ -67,11 +67,11 @@ use serde::Deserialize;
 use tokio::sync::mpsc::unbounded_channel;
 
 use libscrapeycat::{
+    Error,
     effect::EffectInvocation,
     scrapelang::program::run,
     scraper::{HttpDriver, HttpHeaders},
     testutils::path_in_project_root,
-    Error,
 };
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]

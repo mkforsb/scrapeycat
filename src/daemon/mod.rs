@@ -12,17 +12,17 @@ use std::{
 };
 
 use chrono::{DateTime, Local};
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use log::{debug, error, warn};
 use suite::{Job, Suite};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 use crate::{
+    Error,
     daemon::config::Config,
     effect::{EffectInvocation, EffectOptions, EffectSignature},
-    scrapelang::program::{run, ScriptLoaderPointer},
+    scrapelang::program::{ScriptLoaderPointer, run},
     scraper::ReqwestHttpDriver,
-    Error,
 };
 
 flags! {
@@ -393,18 +393,20 @@ mod tests {
     async fn test_print_each_minute() {
         let suite = Suite::new(
             "default".to_string(),
-            vec![Job::new(
-                "default",
-                format!(
-                    "{}/scripts/print.scrape",
-                    env::var("CARGO_MANIFEST_DIR").unwrap()
-                ),
-                None,
-                None,
-                "* * * * *".parse::<CronSpec>().unwrap(),
-                false,
-            )
-            .unwrap()],
+            vec![
+                Job::new(
+                    "default",
+                    format!(
+                        "{}/scripts/print.scrape",
+                        env::var("CARGO_MANIFEST_DIR").unwrap()
+                    ),
+                    None,
+                    None,
+                    "* * * * *".parse::<CronSpec>().unwrap(),
+                    false,
+                )
+                .unwrap(),
+            ],
         );
 
         TEST_PRINT_EACH_MINUTE_COUNT.swap(0, SeqCst);
@@ -441,18 +443,20 @@ mod tests {
     async fn test_print_each_minute_dedup() {
         let suite = Suite::new(
             "default".to_string(),
-            vec![Job::new(
-                "default",
-                format!(
-                    "{}/scripts/print.scrape",
-                    env::var("CARGO_MANIFEST_DIR").unwrap()
-                ),
-                None,
-                None,
-                "* * * * *".parse::<CronSpec>().unwrap(),
-                true,
-            )
-            .unwrap()],
+            vec![
+                Job::new(
+                    "default",
+                    format!(
+                        "{}/scripts/print.scrape",
+                        env::var("CARGO_MANIFEST_DIR").unwrap()
+                    ),
+                    None,
+                    None,
+                    "* * * * *".parse::<CronSpec>().unwrap(),
+                    true,
+                )
+                .unwrap(),
+            ],
         );
 
         TEST_PRINT_EACH_MINUTE_DEDUP_COUNT.swap(0, SeqCst);
@@ -489,18 +493,20 @@ mod tests {
     async fn test_print_each_minute_oversleep() {
         let suite = Suite::new(
             "default".to_string(),
-            vec![Job::new(
-                "default",
-                format!(
-                    "{}/scripts/print.scrape",
-                    env::var("CARGO_MANIFEST_DIR").unwrap()
-                ),
-                None,
-                None,
-                "* * * * *".parse::<CronSpec>().unwrap(),
-                false,
-            )
-            .unwrap()],
+            vec![
+                Job::new(
+                    "default",
+                    format!(
+                        "{}/scripts/print.scrape",
+                        env::var("CARGO_MANIFEST_DIR").unwrap()
+                    ),
+                    None,
+                    None,
+                    "* * * * *".parse::<CronSpec>().unwrap(),
+                    false,
+                )
+                .unwrap(),
+            ],
         );
 
         TEST_PRINT_EACH_MINUTE_OVERSLEEP_COUNT.swap(0, SeqCst);

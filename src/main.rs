@@ -11,11 +11,11 @@ use stderrlog::Timestamp;
 use tokio::sync::mpsc;
 
 use libscrapeycat::{
+    Error,
     daemon::{self, config_file::ConfigFile},
     effect::{self, EffectInvocation, EffectSignature},
     scrapelang::program::run,
     scraper::ReqwestHttpDriver,
-    Error,
 };
 
 #[derive(Debug, Parser)]

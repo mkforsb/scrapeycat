@@ -3,7 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use log::{debug, error};
 use notify_rust::Notification;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -258,12 +258,14 @@ mod tests {
     fn test_report_unknown_kwargs() {
         assert!(report_unknown_kwargs("test", &["a", "b", "c"], &HashMap::new()).is_none());
 
-        assert!(report_unknown_kwargs(
-            "test",
-            &["a", "b", "c"],
-            &map!("a" => 1, "b" => 2, "c" => 3)
-        )
-        .is_none());
+        assert!(
+            report_unknown_kwargs(
+                "test",
+                &["a", "b", "c"],
+                &map!("a" => 1, "b" => 2, "c" => 3)
+            )
+            .is_none()
+        );
 
         assert!(report_unknown_kwargs("test", &[], &map!("a" => 1)).is_some());
         assert!(report_unknown_kwargs("test", &["a", "b", "c"], &map!["d" => 1]).is_some());
@@ -271,39 +273,47 @@ mod tests {
 
     #[test]
     fn test_print() {
-        assert!(print(
-            &["hello".to_string(), "world".to_string()],
-            &HashMap::new(),
-            EffectOptions::SilentTest.into(),
-        )
-        .is_none());
-        assert!(print(
-            &["hello".to_string(), "world".to_string()],
-            &map!["eol" => ""],
-            EffectOptions::SilentTest.into(),
-        )
-        .is_none());
-        assert!(print(
-            &["hello".to_string(), "world".to_string()],
-            &map!["end" => ""],
-            EffectOptions::SilentTest.into(),
-        )
-        .is_some());
+        assert!(
+            print(
+                &["hello".to_string(), "world".to_string()],
+                &HashMap::new(),
+                EffectOptions::SilentTest.into(),
+            )
+            .is_none()
+        );
+        assert!(
+            print(
+                &["hello".to_string(), "world".to_string()],
+                &map!["eol" => ""],
+                EffectOptions::SilentTest.into(),
+            )
+            .is_none()
+        );
+        assert!(
+            print(
+                &["hello".to_string(), "world".to_string()],
+                &map!["end" => ""],
+                EffectOptions::SilentTest.into(),
+            )
+            .is_some()
+        );
     }
 
     #[test]
     fn test_notify() {
-        assert!(notify(
-            &[],
-            &map![
-                "body" => "test_notify",
-                "appname" => "scrapeycat",
-                "title" => "info",
-                "icon" => "lightbulb.svg",
-                "sound" => "ding.wav"
-            ],
-            EffectOptions::SilentTest.into(),
-        )
-        .is_none());
+        assert!(
+            notify(
+                &[],
+                &map![
+                    "body" => "test_notify",
+                    "appname" => "scrapeycat",
+                    "title" => "info",
+                    "icon" => "lightbulb.svg",
+                    "sound" => "ding.wav"
+                ],
+                EffectOptions::SilentTest.into(),
+            )
+            .is_none()
+        );
     }
 }
