@@ -1,0 +1,21 @@
+name: Checks and tests
+
+on:
+  push:
+    branches: ["**"]
+
+jobs:
+  checks-and-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: rustup update
+      - name: Check formatting
+        run: cargo fmt --check --all
+      - name: Clippy
+        run: cargo clippy --all-targets
+      - name: Run tests
+        run: cargo test --features testutils
+      - name: Run book tests
+        run: cargo test --features testutils --test book test_book -- --nocapture
