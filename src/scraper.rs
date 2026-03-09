@@ -638,9 +638,7 @@ mod tests {
 
     #[test]
     fn test_jsonpath_nulls() {
-        let scraper = nullscraper().with_results(results![
-            r#"{"a": null, "b": [null, null]}"#
-        ]);
+        let scraper = nullscraper().with_results(results![r#"{"a": null, "b": [null, null]}"#]);
 
         assert_eq!(
             scraper.jsonpath("$.a").unwrap().results(),
