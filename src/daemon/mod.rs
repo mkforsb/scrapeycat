@@ -397,7 +397,7 @@ mod tests {
                 Job::new(
                     "default",
                     format!(
-                        "{}/scripts/print.scrape",
+                        "{}/tests/assets/scripts/print.scrape",
                         env::var("CARGO_MANIFEST_DIR").unwrap()
                     ),
                     None,
@@ -447,7 +447,7 @@ mod tests {
                 Job::new(
                     "default",
                     format!(
-                        "{}/scripts/print.scrape",
+                        "{}/tests/assets/scripts/print.scrape",
                         env::var("CARGO_MANIFEST_DIR").unwrap()
                     ),
                     None,
@@ -497,7 +497,7 @@ mod tests {
                 Job::new(
                     "default",
                     format!(
-                        "{}/scripts/print.scrape",
+                        "{}/tests/assets/scripts/print.scrape",
                         env::var("CARGO_MANIFEST_DIR").unwrap()
                     ),
                     None,
