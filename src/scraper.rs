@@ -637,6 +637,40 @@ mod tests {
     }
 
     #[test]
+    fn test_jsonpath_nulls() {
+        let scraper = nullscraper().with_results(results![
+            r#"{"a": null, "b": [null, null]}"#
+        ]);
+
+        assert_eq!(
+            scraper.jsonpath("$.a").unwrap().results(),
+            &results!["null"]
+        );
+
+        assert_eq!(
+            scraper.jsonpath("$.b[*]").unwrap().results(),
+            &results!["null", "null"]
+        );
+    }
+
+    #[test]
+    fn test_jsonpath_bools() {
+        let scraper = nullscraper().with_results(results![
+            r#"{"active": true, "flags": [true, false, true]}"#
+        ]);
+
+        assert_eq!(
+            scraper.jsonpath("$.active").unwrap().results(),
+            &results!["true"]
+        );
+
+        assert_eq!(
+            scraper.jsonpath("$.flags[*]").unwrap().results(),
+            &results!["true", "false", "true"]
+        );
+    }
+
+    #[test]
     fn test_jsonpath_parse_error() {
         let scraper = nullscraper().with_results(results![
             r#"{
