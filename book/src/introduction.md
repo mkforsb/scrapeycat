@@ -21,7 +21,7 @@ The core workflow can be extended by using additional features:
 * Support for storing and loading variables.
 * Variable substitution in strings (e.g URLs, headers).
 * Scripts can call other scripts, passing arguments and receiving output.
-* **TODO** JSON support
+* JSONPath queries for extracting data from JSON responses.
 
 Scrapeycat is implemented in asynchronous Rust using [Tokio](https://tokio.rs/) and
 [Reqwest](https://github.com/seanmonstar/reqwest).

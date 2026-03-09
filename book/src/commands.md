@@ -13,6 +13,7 @@
 - [`first`](./commands-first.md)
 - [`get`](./commands-get.md)
 - [`header`](./commands-header.md)
+- [`jsonPath`](./commands-jsonpath.md)
 - [`load`](./commands-load.md)
 - [`map`](./commands-map.md)
 - [`prepend`](./commands-prepend.md)
