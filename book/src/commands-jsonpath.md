@@ -21,7 +21,7 @@ String values are returned without surrounding quotes. Null values are returned 
     }
 } -->
 ```lua
--- results = ['{"store": {"book": [{"title": "Neuromancer", ...}, {"title": "Snow Crash", ...}]}}']
+-- results = ['{"store": {"book": [{"title": "Neuromancer", "price": 9.99}, {"title": "Snow Crash", "price": 14.99}]}}']
 
 jsonPath("$.store.book[*].title")
 
@@ -36,7 +36,7 @@ jsonPath("$.store.book[*].title")
     }
 } -->
 ```lua
--- results = ['{"store": {"book": [{"title": "Neuromancer", "price": 9.99}, ...]}}']
+-- results = ['{"store": {"book": [{"title": "Neuromancer", "price": 9.99}, {"title": "Snow Crash", "price": 14.99}]}}']
 
 jsonPath("$.store.book[*].price")
 
