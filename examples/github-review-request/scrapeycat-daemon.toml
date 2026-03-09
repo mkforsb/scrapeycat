@@ -1,0 +1,8 @@
+config_version = 1
+script_dirs = ["./"]
+script_names = ["${NAME}.scrape"]
+
+[suites.default]
+jobs = [
+    { script = "github-review-request", args = ["GITHUB_PERSONAL_ACCESS_TOKEN"], schedule = "*/5 * * * *", dedup = true },
+]
